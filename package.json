@@ -1,0 +1,26 @@
+{
+  "name": "zju-library-booking-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "booking": "node --env-file-if-exists=.env --import tsx src/cli/booking.ts",
+    "booking:dry": "node --env-file-if-exists=.env --import tsx src/cli/booking.ts --dry-run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "axios": "^1.20.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "^26.6.1",
+    "crypto-js": "^4.2.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
