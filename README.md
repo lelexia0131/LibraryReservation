@@ -1,6 +1,8 @@
-# 浙江大学图书馆座位预约 API Client（第一阶段）
+# 浙江大学图书馆座位预约 API Client
 
-单用户 CLI：手动提供 booking token，查询区域、日期和目标座位，生成官网兼容的 aesjson，显式执行一次预约。默认 dry-run。没有 CAS 登录、账号密码保存、UI、并发抢座或自动候补。
+单用户 TypeScript/Node CLI：查询区域、日期和目标座位，生成官网兼容的 aesjson，显式执行一次预约。默认 dry-run。第二阶段已增加持久认证核心和适配接口，但当前项目没有 Electron；真实 CAS 窗口、系统安全存储绑定和桌面 UI 尚未接入。不会保存账号密码、自动抢座或在登录后自动预约。
+
+第二阶段架构、验证结果、23 项交付报告和 Electron 接入要求见 [持久认证说明](docs/auth.md)。`auth:*` 命令目前会明确报 `AUTH_ADAPTER_UNAVAILABLE`，不是已完成真实登录的桌面 App。
 
 实现已通过本地模拟 HTTP 测试；**尚未使用真实 token 联调，也未发送真实预约**。官网字段依据和范围见 [协议核验记录](docs/protocol.md)。响应不符合已核实结构时停止并输出仅含字段名、类型、数组长度的摘要，不猜字段。
 
@@ -13,16 +15,16 @@ npm ci
 Copy-Item .env.example .env
 ```
 
-在本地 `.env` 中填写，或使用同名环境变量（环境变量优先）：
+在本地 `.env` 中填写非敏感预约配置，或使用同名环境变量（环境变量优先）：
 
 ```dotenv
-BOOKING_TOKEN=<token>
+AUTH_MODE=env
 TARGET_DATE=YYYY-MM-DD
 TARGET_SEAT=Z2Fxxx
 DRY_RUN=true
 ```
 
-上面是占位符，必须替换为自己的原始 token、合法日期和实际座位编号。不要添加 `bearer` 前缀。`.env` 和 `.env.*` 已被 `.gitignore` 排除，仅 `.env.example` 可提交。不要把配置、抓包或终端敏感输出提交到 Git。
+日期和座位编号是占位符。开发 CLI 的 `AUTH_MODE=env` 仍从进程环境读取 `BOOKING_TOKEN`，使用原始 token、不加 `bearer` 前缀；不要把真实 token 写进配置、命令历史或提交到 Git。App 的持久认证模式只使用安全存储。`.env` 和 `.env.*` 已被 `.gitignore` 排除，仅无凭据的 `.env.example` 可提交。
 
 可选配置：
 
@@ -91,7 +93,8 @@ execute 在同样的查询和校验之后，由 `BookingApi.confirmSeat({seatId,
 
 | 文件 | 作用 |
 | --- | --- |
-| `src/config/config.ts` | 配置校验、`TokenProvider` 接口、`EnvironmentTokenProvider` |
+| `src/config/config.ts` | 配置校验、`EnvironmentTokenProvider` 和兼容导出 |
+| `src/auth/` | `TokenProvider`、持久认证状态机、安全存储、CAS/网页 adapter 契约 |
 | `src/api/httpClient.ts` | axios 统一封装、认证注入、8 秒超时、有限查询重试 |
 | `src/api/types.ts`、`src/api/parsers.ts` | 类型、运行时响应校验、结果解析 |
 | `src/api/bookingApi.ts` | 查询、详情、`confirmSeat`/`submitSeatConfirm` 和 AES 组装 |
@@ -106,7 +109,7 @@ execute 在同样的查询和校验之后，由 `BookingApi.confirmSeat({seatId,
 | `.env.example`、`.gitignore` | 无凭据配置模板与忽略规则 |
 | `package.json`、`package-lock.json`、`tsconfig*.json` | 依赖、命令和构建配置 |
 
-HTTP Client 每次统一追加 `authorization: "bearer" + rawToken` 到 JSON body 和 header，业务代码不拼 token。confirm body 只有 `aesjson` 和一次 `authorization`。不跟随 HTTP 重定向，避免认证字段被带往其他地址。
+HTTP Client 的认证请求统一追加 `authorization: "bearer" + rawToken` 到 JSON body 和 header，业务代码不拼 token。CAS 换 token 明确使用 `authRequired: false`，不追加认证，并禁止重试。confirm body 只有 `aesjson` 和一次 `authorization`。不跟随 HTTP 重定向，避免认证字段被带往其他地址。401 通知 token provider 清除失效凭据，原请求不会自动重发；confirm 仍需人工核对预约记录。
 
 仅查询的临时网络错误、502/503/504 最多重试 2 次，等待 500ms、1000ms。400/401/403/429、其他 HTTP 错误、业务失败、格式错误和 confirm 都不重试。区域分页串行，有重复/计数变化即停止；超过 100 页提示缩小场馆范围。
 
@@ -116,7 +119,7 @@ AES 使用 Node 原生 crypto，无生产 CryptoJS 依赖。key 为当前本地�
 
 生产逻辑没有固定抓包中的 area、segment、seat_id、座位编号或日期。`id="1"` 和普通座位分类 `"1"` 是已核实的官网业务类型标识，分类还必须存在于 index 返回的元数据中；它们不是某次预约的区域或座位 ID。
 
-CAS 尚未实现，唯一需要人工完成的是在官网正常登录并取得当前 booking token。之后全部业务不依赖 CAS；未来实现 `CasTokenProvider.getToken()` 即可替换认证来源。没有密码、验证码或登录绕过逻辑。
+现有 CLI 默认保持 `env` 开发模式。`createTokenProvider` 给桌面宿主默认选择 `persistent-cas`，由 `AuthManager.getToken()` 提供同一接口；缺少 adapter 时明确失败，不退回环境 token。`BookingService` 只增加了 401 失效通知，区域、segment、seat、AES、confirm 的职责保持不变。没有密码、验证码或登录绕过逻辑。
 
 ## 验证
 
@@ -128,4 +131,4 @@ npm run build
 
 测试使用实际 BookingService、解析器和 Node AES，仅替换 axios 的 HTTP adapter；不 mock 整个 Service。CryptoJS 仅为开发测试依赖，验证密文逐字节兼容、UTF-8、解密还原、当前日期及跨午夜换 key。测试同时覆盖分页、歧义、状态冲突、目标不存在、dry-run 零 confirm、execute 一次 confirm、拒绝重复运行、业务失败和错误脱敏。CLI 子进程测试不使用真实凭据，也不联网。
 
-本目录初始为空且没有 Git 仓库；实现没有初始化 Git 或创建 commit。
+第二阶段开始检查时尚无 Git 仓库；本轮结束检查时已存在基线提交 `c3c051e 初始化`。本次认证实现没有执行 Git 初始化或创建 commit，所有变更保留在工作区。

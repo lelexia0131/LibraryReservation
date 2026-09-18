@@ -9,7 +9,8 @@ import { findTargetSeat, validateSeatAvailable } from './seatSelector.js';
 export class BookingService {
   private started = false;
   constructor(private readonly tokenProvider: TokenProvider,
-    private readonly apiFactory: (token: string) => BookingApi = token => new BookingApi(new HttpClient(token)),
+    private readonly apiFactory: (token: string) => BookingApi = token => new BookingApi(new HttpClient(token, undefined, undefined,
+      () => this.tokenProvider.invalidateToken?.(token) ?? Promise.resolve())),
     private readonly logger: (message: string) => void = console.log) {}
 
   async runBooking(config: BookingConfig) {

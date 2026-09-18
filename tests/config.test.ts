@@ -31,3 +31,8 @@ test('redaction removes full tokens, email, phone, long student numbers and term
   const value = redact(`${fakeToken} bearer${fakeToken} person@example.org 13800000000 2026012345\n\x1b`, fakeToken);
   for (const secret of [fakeToken, 'person@example.org', '13800000000', '2026012345', '\x1b', '\n']) assert.ok(!value.includes(secret));
 });
+
+test('credential key/value diagnostics are redacted even without a known token', () => {
+  const value = redact('cas=cas-secret&token=token-secret {"authorization":"auth-secret","Cookie":"sid=cookie-secret; other=value","Set-Cookie":"set-secret","password":"pass-secret"}');
+  for (const secret of ['cas-secret', 'token-secret', 'auth-secret', 'cookie-secret', 'set-secret', 'pass-secret']) assert.ok(!value.includes(secret));
+});

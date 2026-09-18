@@ -6,3 +6,10 @@ dist/
 .research/
 coverage/
 *.log
+auth-state/
+*.har
+token*
+!src/auth/TokenProvider.ts
+!src/auth/TokenValidator.ts
+!tests/TokenValidator.test.ts
+playwright/.auth/

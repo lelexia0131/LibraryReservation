@@ -7,6 +7,9 @@
     "node": ">=24"
   },
   "scripts": {
+    "auth:test": "node --import tsx src/cli/auth.ts test",
+    "auth:clear-token": "node --import tsx src/cli/auth.ts clear-token",
+    "auth:logout": "node --import tsx src/cli/auth.ts logout",
     "booking": "node --env-file-if-exists=.env --import tsx src/cli/booking.ts",
     "booking:dry": "node --env-file-if-exists=.env --import tsx src/cli/booking.ts --dry-run",
     "typecheck": "tsc --noEmit",

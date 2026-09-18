@@ -1,4 +1,6 @@
 import { BookingError } from '../errors.js';
+import type { TokenProvider } from '../auth/TokenProvider.js';
+export type { TokenProvider } from '../auth/TokenProvider.js';
 
 export interface BookingConfig {
   targetDate: string;
@@ -42,7 +44,6 @@ export function loadConfig(env: NodeJS.ProcessEnv, args: string[] = []): Booking
   return config;
 }
 
-export interface TokenProvider { getToken(): Promise<string> }
 export function ensureToken(token: string): string {
   if (!token || token !== token.trim() || /\s/.test(token) || /^bearer/i.test(token) || /^<.*>$/.test(token)) {
     throw new BookingError('INVALID_TOKEN', 'BOOKING_TOKEN must contain the raw token, without bearer prefix or whitespace.');

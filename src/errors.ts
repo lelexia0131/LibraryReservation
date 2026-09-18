@@ -27,7 +27,8 @@ export function redact(text: string, token = ''): string {
       text = text.split(secret).join('[redacted]');
     }
   }
-  return text.replace(/bearer[^\s"',}]+/gi, 'bearer[redacted]')
+  return text.replace(/(["']?(?:authorization|cookie|set-cookie|token|cas|password|mobile|email|student_?id)["']?\s*[:=]\s*)("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;&}]+)/gi, '$1[redacted]')
+    .replace(/bearer[^\s"',}]+/gi, 'bearer[redacted]')
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
     .replace(/\b\d{8,}\b/g, '[number]')
     .replace(/[\x00-\x1f\x7f]/g, ' ');
