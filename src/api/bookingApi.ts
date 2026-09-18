@@ -2,9 +2,11 @@ import { encryptBookingPayload, encryptionDate, systemClock, type Clock } from '
 import { HttpClient } from './httpClient.js';
 import { envelope, id, parseBookingResult, parseReserveIndex, parseReserveList, parseSeatDates, parseSeats, record } from './parsers.js';
 import type { ReserveListParams, SeatListParams } from './types.js';
+import { assertRealConfirmEnabled } from '../config/runtimePolicy.js';
 
 export class BookingApi {
-  constructor(private readonly http: HttpClient, private readonly clock: Clock = systemClock) {}
+  constructor(private readonly http: HttpClient, private readonly clock: Clock = systemClock,
+    private readonly assertConfirmAllowed: () => void = assertRealConfirmEnabled) {}
   async fetchReserveIndex() { return parseReserveIndex(await this.http.post('/reserve/index/index', { id: '1' })); }
   async fetchReserveList(params: ReserveListParams) { return parseReserveList(await this.http.post('/reserve/index/list', params)); }
   async fetchReserveDetail(params: { id: string; areaId: string; date?: string }) {
@@ -18,6 +20,7 @@ export class BookingApi {
     return { aesjson: encryptBookingPayload(payload, now), encryptionDate: encryptionDate(now) };
   }
   async confirmSeat(params: { seatId: string; segment: string }) {
+    this.assertConfirmAllowed();
     // Build at submission time, never reuse a dry-run ciphertext across midnight.
     const { aesjson } = this.prepareConfirm(params);
     return parseBookingResult(await this.http.post('/api/Seat/confirm', { aesjson }));

@@ -2,27 +2,76 @@
   "name": "zju-library-booking-client",
   "version": "0.1.0",
   "private": true,
+  "description": "浙江大学图书馆预约助手，仅测试查询，未提交预约",
+  "author": "LibraryReservation",
+  "main": "out/main.cjs",
   "type": "module",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
+    "postinstall": "node node_modules/electron/install.js",
     "auth:test": "node --import tsx src/cli/auth.ts test",
     "auth:clear-token": "node --import tsx src/cli/auth.ts clear-token",
     "auth:logout": "node --import tsx src/cli/auth.ts logout",
     "booking": "node --env-file-if-exists=.env --import tsx src/cli/booking.ts",
     "booking:dry": "node --env-file-if-exists=.env --import tsx src/cli/booking.ts --dry-run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.electron.json",
     "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "app:build": "npm run typecheck && node scripts/build-app.mjs",
+    "app:dev": "npm run app:build && node scripts/app-dev.mjs",
+    "test:desktop": "npm run app:build && node scripts/test-desktop.mjs",
+    "dist": "npm run app:build && electron-builder --win nsis --x64"
   },
   "dependencies": {
     "axios": "^1.20.0"
+  },
+  "build": {
+    "appId": "cn.libraryreservation.desktop",
+    "productName": "LibraryReservation",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createStartMenuShortcut": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "浙江大学图书馆预约助手",
+      "installerLanguages": [
+        "zh_CN"
+      ],
+      "include": "build/installer.nsh",
+      "artifactName": "LibraryReservation-Setup-${version}-${arch}.${ext}"
+    }
   },
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^26.6.1",
     "crypto-js": "^4.2.0",
+    "electron": "^44.4.2",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   }

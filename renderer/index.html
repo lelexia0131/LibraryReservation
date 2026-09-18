@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>浙江大学图书馆预约助手</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><div class="brand-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M5 7h9l2 2 2-2h9v20h-9l-2 2-2-2H5zM16 9v20M9 12h3m-3 5h3m8-5h3m-3 5h3"/></svg></div><h1>浙江大学图书馆预约助手</h1></div>
+    <div class="account"><span id="auth-status" class="badge pending" role="status">正在检查</span><button id="auth-button" class="button secondary" disabled>登录</button><button id="website-button" class="button text-button" disabled>打开图书馆 <span aria-hidden="true">↗</span></button></div>
+  </header>
+  <main>
+    <div id="notice" class="notice" role="alert" hidden></div>
+    <section class="query-card" aria-labelledby="query-title">
+      <div class="section-heading"><div><p class="eyebrow">座位查询</p><h2 id="query-title">找到你的自习时光</h2></div><span class="quiet-label">仅查询</span></div>
+      <form id="query-form" novalidate>
+        <fieldset id="query-fields">
+          <div class="form-grid">
+            <label class="date-field">日期<input id="targetDate" name="targetDate" type="date" required aria-describedby="form-error"></label>
+            <label>馆舍<span class="optional">选填</span><input id="targetBuilding" name="targetBuilding" type="text" placeholder="填写馆舍名称" maxlength="100" autocomplete="off"></label>
+            <label>楼层<span class="optional">选填</span><input id="targetFloor" name="targetFloor" type="text" placeholder="填写楼层名称" maxlength="100" autocomplete="off"></label>
+            <label>区域<span class="optional">选填</span><input id="targetArea" name="targetArea" type="text" placeholder="填写区域名称" maxlength="100" autocomplete="off"></label>
+            <label>座位号<input id="targetSeat" name="targetSeat" type="text" placeholder="填写完整座位号" required maxlength="100" autocomplete="off" aria-describedby="form-error"></label>
+            <div class="time-range"><label>开始时间<input id="startTime" name="startTime" type="time" value="00:01" required aria-describedby="form-error"></label><span aria-hidden="true">—</span><label>结束时间<input id="endTime" name="endTime" type="time" value="23:59" required aria-describedby="form-error"></label></div>
+          </div>
+        </fieldset>
+        <div class="form-footer"><p id="form-error" role="alert"></p><button id="query-button" type="submit" class="button primary" disabled><span class="spinner" aria-hidden="true" hidden></span><span id="query-button-label">测试查询</span><span class="button-arrow" aria-hidden="true">→</span></button></div>
+      </form>
+    </section>
+    <section id="result" class="result-card" aria-labelledby="result-title" aria-live="polite" aria-busy="false">
+      <div class="result-heading"><h2 id="result-title">查询结果</h2><span id="result-badge" class="badge" hidden></span></div>
+      <div id="empty-result" class="empty-result"><div class="empty-icon" aria-hidden="true">⌑</div><p id="empty-title">选择座位与时段，开始查询</p></div>
+      <dl id="result-details" hidden><div><dt>目标座位</dt><dd id="result-seat"></dd></div><div><dt>所在区域</dt><dd id="result-area"></dd></div><div class="result-period"><dt>查询时段</dt><dd id="result-period"></dd></div></dl>
+      <p class="result-note"><span aria-hidden="true">✓</span> 仅测试查询，未提交预约</p>
+    </section>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>

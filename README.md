@@ -1,12 +1,45 @@
-# 浙江大学图书馆座位预约 API Client
+# 浙江大学图书馆预约助手
 
-单用户 TypeScript/Node CLI：查询区域、日期和目标座位，生成官网兼容的 aesjson，显式执行一次预约。默认 dry-run。第二阶段已增加持久认证核心和适配接口，但当前项目没有 Electron；真实 CAS 窗口、系统安全存储绑定和桌面 UI 尚未接入。不会保存账号密码、自动抢座或在登录后自动预约。
+Windows x64 桌面应用：在官方浙江大学认证窗口登录，安全保存登录状态，填写日期、馆舍、楼层、区域、座位号与时间，查询座位是否空闲。
 
-第二阶段架构、验证结果、23 项交付报告和 Electron 接入要求见 [持久认证说明](docs/auth.md)。`auth:*` 命令目前会明确报 `AUTH_ADAPTER_UNAVAILABLE`，不是已完成真实登录的桌面 App。
+**当前 Desktop App 是仅支持 dry-run 查询的测试版本，不会发送真实预约。** 主界面只显示用户需要的状态和结果；内嵌官网同样拦截预约提交。不会保存账号密码、自动填密码或处理验证码。
 
-实现已通过本地模拟 HTTP 测试；**尚未使用真实 token 联调，也未发送真实预约**。官网字段依据和范围见 [协议核验记录](docs/protocol.md)。响应不符合已核实结构时停止并输出仅含字段名、类型、数组长度的摘要，不猜字段。
+## 安装与使用
 
-## 安装与配置
+双击 `dist/LibraryReservation-Setup-0.1.0-x64.exe`。中文安装向导允许选择安装目录；“创建桌面快捷方式”是独立复选项，默认不勾选；安装器始终创建开始菜单入口。安装后直接启动，不需要 Node.js、npm、源码或 `.env`。
+
+1. 打开应用，等待登录检查。没有可恢复的登录状态时点击“登录”。
+2. 在官方浙江大学页面亲自完成认证，成功后窗口关闭，主界面显示“已登录”。
+3. 填写日期、完整座位号和时间。馆舍、楼层、区域使用官网的完整名称；出现多个匹配区域时补全筛选条件。
+4. 点击“测试查询”，查看空闲／不可用结果。结果下始终显示“仅测试查询，未提交预约”。
+5. 再次启动会尝试恢复登录；“退出”清除本地加密登录状态及专用浏览器会话。
+
+界面、认证架构、安装器实现、验证范围及完整调用链见 [第三阶段交付报告](docs/desktop.md)。官网字段依据见 [协议核验记录](docs/protocol.md)。第二阶段的历史记录见 [持久认证说明](docs/auth.md)。
+
+## 从源码运行与打包
+
+开发环境需要 Node.js 24 或以上，Windows x64：
+
+```powershell
+npm ci
+npm run app:dev
+```
+
+`npm ci` 的项目安装脚本会准备 Electron 运行时。应用不需要 `.env`。
+
+```powershell
+npm test
+npm run typecheck
+npm run build
+npm run test:desktop
+npm run dist
+```
+
+`app:build` 将主进程、隔离 preload、原生 HTML/CSS/TypeScript 界面构建到 `out/`。`dist` 使用 electron-builder + NSIS 生成独立安装包和 `dist/win-unpacked/`。`test:desktop` 使用真实 Electron、系统加密和合成官网响应，截图位于被 Git 忽略的 `.artifacts/`；不会触及用户的实际登录数据。
+
+## Developer / CLI
+
+### 配置
 
 需要 Node.js 24 或以上：
 
@@ -39,7 +72,7 @@ DRY_RUN=true
 
 无需配置所有筛选字段，但最终必须唯一匹配一个区域。已确认的区域列表不包含座位编号映射，因此不能从 `Z2Fxxx` 猜出区域；如果返回多个区域，程序会在 Seat/date 之前报 `TARGET_AREA_AMBIGUOUS`，此时补充以上筛选字段。不会遍历全馆座位或默认选第一个区域。
 
-## 运行
+### 运行
 
 查询与生成计划，**始终不提交**，即便 `.env` 中写了 `DRY_RUN=false`：
 
@@ -53,13 +86,13 @@ npm run booking:dry
 npm run booking
 ```
 
-真正预约有两种显式方式：
+历史执行参数仍可解析，但当前构建的核心硬锁会在发送前抛出 `REAL_CONFIRM_DISABLED`：
 
 ```powershell
 npm run booking -- --execute
 ```
 
-或者将 `.env` 的 `DRY_RUN=false` 后运行 `npm run booking`。`--dry-run` 的优先级最高。参数拼错会报错。
+将 `.env` 的 `DRY_RUN=false` 后运行同样不能绕过硬锁。`--dry-run` 的优先级最高。参数拼错会报错。该锁不接受环境变量、界面或 IPC 参数开启。
 
 成功和 dry-run 退出码为 `0`，配置、认证、查询、解析、业务失败或网络失败为 `1`。confirm 遇到网络中断或 HTTP 5xx 会报 `CONFIRM_OUTCOME_UNKNOWN`，不会自动再发；应先在官网查看预约记录。
 
@@ -85,7 +118,7 @@ loadConfig → validateConfig
 → 输出脱敏计划，结束；绝不调用 confirm
 ```
 
-execute 在同样的查询和校验之后，由 `BookingApi.confirmSeat({seatId,segment})` 在发送前生成 AES，再发送一次 `POST /api/Seat/confirm`。只有数值 `code === 1` 才返回成功；HTTP 200 本身不代表预约成功。返回 `BookingResult` 包括 `success/code/message/seat/no/area/time/newTime`。
+execute 在同样的查询和校验之后，会在 `BookingApi.confirmSeat()` 的默认策略检查处停止。只有测试夹具中的内存 HTTP adapter 注入测试策略，保留原有确认协议回归测试；该夹具不进入安装包。
 
 **时间语义：** `TARGET_DATE` 是预约日期，AES 日期是发送时的客户端本地日期，两者分离。宿主时区应与使用官网时的浏览器时区保持一致；没有自动纠正服务器时差。多个可用 segment 必须由查询时间唯一确定；跨 segment、关闭的 segment、重叠歧义都会报错。最终 confirm 只有 seat_id 和 segment，没有起止时间，因此实际预约时段以服务端返回的 `time/newTime` 为准，不能把查询时间解释为任意自定义预约时段。开放状态以接口的 `times[].status` 为准，其他未解释字段予以保留，最终规则仍由服务端执行。
 
@@ -131,4 +164,4 @@ npm run build
 
 测试使用实际 BookingService、解析器和 Node AES，仅替换 axios 的 HTTP adapter；不 mock 整个 Service。CryptoJS 仅为开发测试依赖，验证密文逐字节兼容、UTF-8、解密还原、当前日期及跨午夜换 key。测试同时覆盖分页、歧义、状态冲突、目标不存在、dry-run 零 confirm、execute 一次 confirm、拒绝重复运行、业务失败和错误脱敏。CLI 子进程测试不使用真实凭据，也不联网。
 
-第二阶段开始检查时尚无 Git 仓库；本轮结束检查时已存在基线提交 `c3c051e 初始化`。本次认证实现没有执行 Git 初始化或创建 commit，所有变更保留在工作区。
+第三阶段没有执行 commit，所有变更保留在工作区。

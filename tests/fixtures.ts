@@ -31,7 +31,8 @@ export function harness(respond: (request: Request, call: number) => unknown, cl
     return { data: await respond(request, requests.length), status: 200, statusText: 'OK', headers: new AxiosHeaders(), config: requestConfig };
   } });
   const http = new HttpClient(fakeToken, transport, async ms => { waits.push(ms); });
-  return { requests, waits, http, api: new BookingApi(http, clock) };
+  // Only this synthetic in-memory transport may exercise confirmation protocol tests.
+  return { requests, waits, http, api: new BookingApi(http, clock, () => {}) };
 }
 export function normalResponse(request: Request): unknown {
   switch (request.path) {
