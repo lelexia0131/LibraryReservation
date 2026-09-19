@@ -38,7 +38,7 @@ test('query recovers on second attempt and injects auth once into body and heade
   assert.equal(request.config.maxRedirects, 0);
 });
 test('business failures and non-transient TLS errors are not retried', async () => {
-  const h = harness(() => ({ code: 10001, msg: fakeToken }));
+  const h = harness(() => ({ code: 987, msg: fakeToken }));
   await assert.rejects(h.api.fetchSeatDate({ build_id: '77' }), { code: 'API_BUSINESS_ERROR' });
   assert.equal(h.requests.length, 1);
   const tls = harness(request => httpFailure(request, undefined, 'CERT_HAS_EXPIRED'));

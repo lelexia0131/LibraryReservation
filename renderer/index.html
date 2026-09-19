@@ -1,42 +1,20 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>浙江大学图书馆预约助手</title>
-  <link rel="stylesheet" href="style.css">
-</head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>浙江大学图书馆预约助手</title><link rel="stylesheet" href="style.css"></head>
 <body>
-  <header class="app-header">
-    <div class="brand"><div class="brand-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M5 7h9l2 2 2-2h9v20h-9l-2 2-2-2H5zM16 9v20M9 12h3m-3 5h3m8-5h3m-3 5h3"/></svg></div><h1>浙江大学图书馆预约助手</h1></div>
-    <div class="account"><span id="auth-status" class="badge pending" role="status">正在检查</span><button id="auth-button" class="button secondary" disabled>登录</button><button id="website-button" class="button text-button" disabled>打开图书馆 <span aria-hidden="true">↗</span></button></div>
-  </header>
-  <main>
-    <div id="notice" class="notice" role="alert" hidden></div>
-    <section class="query-card" aria-labelledby="query-title">
-      <div class="section-heading"><div><p class="eyebrow">座位查询</p><h2 id="query-title">找到你的自习时光</h2></div><span class="quiet-label">仅查询</span></div>
-      <form id="query-form" novalidate>
-        <fieldset id="query-fields">
-          <div class="form-grid">
-            <label class="date-field">日期<input id="targetDate" name="targetDate" type="date" required aria-describedby="form-error"></label>
-            <label>馆舍<span class="optional">选填</span><input id="targetBuilding" name="targetBuilding" type="text" placeholder="填写馆舍名称" maxlength="100" autocomplete="off"></label>
-            <label>楼层<span class="optional">选填</span><input id="targetFloor" name="targetFloor" type="text" placeholder="填写楼层名称" maxlength="100" autocomplete="off"></label>
-            <label>区域<span class="optional">选填</span><input id="targetArea" name="targetArea" type="text" placeholder="填写区域名称" maxlength="100" autocomplete="off"></label>
-            <label>座位号<input id="targetSeat" name="targetSeat" type="text" placeholder="填写完整座位号" required maxlength="100" autocomplete="off" aria-describedby="form-error"></label>
-            <div class="time-range"><label>开始时间<input id="startTime" name="startTime" type="time" value="00:01" required aria-describedby="form-error"></label><span aria-hidden="true">—</span><label>结束时间<input id="endTime" name="endTime" type="time" value="23:59" required aria-describedby="form-error"></label></div>
-          </div>
-        </fieldset>
-        <div class="form-footer"><p id="form-error" role="alert"></p><button id="query-button" type="submit" class="button primary" disabled><span class="spinner" aria-hidden="true" hidden></span><span id="query-button-label">测试查询</span><span class="button-arrow" aria-hidden="true">→</span></button></div>
-      </form>
-    </section>
-    <section id="result" class="result-card" aria-labelledby="result-title" aria-live="polite" aria-busy="false">
-      <div class="result-heading"><h2 id="result-title">查询结果</h2><span id="result-badge" class="badge" hidden></span></div>
-      <div id="empty-result" class="empty-result"><div class="empty-icon" aria-hidden="true">⌑</div><p id="empty-title">选择座位与时段，开始查询</p></div>
-      <dl id="result-details" hidden><div><dt>目标座位</dt><dd id="result-seat"></dd></div><div><dt>所在区域</dt><dd id="result-area"></dd></div><div class="result-period"><dt>查询时段</dt><dd id="result-period"></dd></div></dl>
-      <p class="result-note"><span aria-hidden="true">✓</span> 仅测试查询，未提交预约</p>
-    </section>
-  </main>
-  <script src="renderer.js"></script>
-</body>
-</html>
+<header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">阅</span><h1>浙江大学图书馆预约助手</h1></div><div class="account"><span id="auth-status" class="badge pending" role="status">正在检查</span><button id="auth-button" class="button secondary" disabled>登录</button><button id="website-button" class="button text-button">打开图书馆 ↗</button></div></header>
+<main>
+<div class="intro"><p class="eyebrow">YOUR STUDY SPACE</p><h2>给专注，留一个位置。</h2></div><div id="notice" class="notice" role="alert" hidden></div>
+<div class="workspace">
+<section class="card manual" aria-labelledby="manual-title"><div class="section-heading"><h2 id="manual-title">手动选择</h2><span class="step">01</span></div>
+<fieldset id="period-fields"><div class="form-grid"><label>日期<input id="day" type="date" required></label><label>开始时间<input id="startTime" type="time" value="08:00" required></label><label>结束时间<input id="endTime" type="time" value="22:00" required></label></div></fieldset>
+<div class="location-heading"><h3>选择位置</h3><button id="refresh-button" class="button text-button" disabled>刷新位置 ↻</button></div><details id="location-panel" open><summary>选择有空位的位置</summary><div id="locations" class="tree"><p class="muted">登录后自动加载位置</p></div></details>
+<div class="seat-heading"><h3>选择座位</h3><span id="seat-count" class="muted"></span></div><p id="seat-hint" class="muted">展开位置，查看空闲座位</p><div id="seats" class="seat-grid" role="group" aria-label="空闲座位"></div>
+<div id="selection" class="selection" hidden><p id="selected-seat"></p><p id="selected-location"></p><p id="selected-period"></p><button id="reserve-button" class="button primary">预约该座位</button></div></section>
+<section class="card auto" aria-labelledby="auto-title"><div class="section-heading"><h2 id="auto-title">一键选择</h2><span class="step">02</span></div>
+<div class="auto-card" data-mode="main"><div><h3>主馆一键选择</h3><p id="status-main" role="status">等待开始</p></div><div class="actions"><button class="button primary start" data-mode="main">开始</button><button class="button secondary stop" data-mode="main" hidden>停止</button></div></div>
+<div class="auto-card" data-mode="all"><div><h3>所有场馆一键选择</h3><p id="status-all" role="status">等待开始</p></div><div class="actions"><button class="button primary start" data-mode="all">开始</button><button class="button secondary stop" data-mode="all" hidden>停止</button></div></div>
+<div class="auto-card custom" data-mode="custom"><div><h3>自定义位置一键选择</h3><p id="status-custom" role="status">等待开始</p></div><div class="actions"><button class="button primary start" data-mode="custom">开始</button><button class="button secondary stop" data-mode="custom" hidden>停止</button></div><details id="scope-panel"><summary>选择范围 <span id="scope-count"></span></summary><div id="scopes" class="tree"><p class="muted">登录后自动加载位置</p></div></details></div>
+</section></div>
+<section id="result" class="card result" aria-labelledby="result-title" aria-live="polite"><div class="section-heading"><h2 id="result-title">预约结果</h2><span id="result-badge" class="badge" hidden></span></div><p id="result-empty" class="muted">你的预约结果会显示在这里</p><p id="result-message" hidden></p><dl id="result-details" hidden><div><dt>座位</dt><dd id="result-seat"></dd></div><div><dt>位置</dt><dd id="result-location"></dd></div><div><dt>预约时间</dt><dd id="result-period"></dd></div><div><dt>到场时间</dt><dd id="result-arrival"></dd></div></dl><button id="result-website" class="button text-button">打开图书馆 ↗</button></section>
+</main><script src="renderer.js"></script></body></html>

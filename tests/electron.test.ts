@@ -91,14 +91,15 @@ test('safe errors never reflect server text, stack, headers or arbitrary error c
     assert.doesNotMatch(JSON.stringify(safeError(error)), new RegExp(`${fakeToken}|stack|headers`));
   }
 });
-test('IPC accepts only exact local main window and exposes precisely five actions', async () => {
+test('IPC accepts only exact local main window and exposes the fixed desktop allowlist', async () => {
   const mainFrame = { url: 'file:///app/renderer/index.html' };
   const contents = { mainFrame };
   const window = { isDestroyed: () => false, webContents: contents } as unknown as BrowserWindow;
   const event = { sender: contents, senderFrame: mainFrame } as unknown as IpcMainInvokeEvent;
   const handlers = new Map<string, (event: IpcMainInvokeEvent, input?: unknown) => unknown>();
   registerIpc({ handle: (channel, handler) => { handlers.set(channel, handler); } }, window, mainFrame.url, desktop().controller);
-  assert.deepEqual([...handlers.keys()], ['auth:get-status', 'auth:login', 'auth:logout', 'booking:open-web', 'booking:dry-run']);
+  assert.deepEqual([...handlers.keys()], ['auth:get-status', 'auth:login', 'auth:logout', 'booking:open-web',
+    'availability:list', 'availability:seats', 'reservation:manual', 'autoselect:start', 'autoselect:stop', 'autoselect:status']);
   assert.equal(trustedSender(event, window, mainFrame.url), true);
   for (const other of [
     { ...event, sender: {} }, { ...event, senderFrame: { url: mainFrame.url } },
@@ -107,7 +108,7 @@ test('IPC accepts only exact local main window and exposes precisely five action
     const result = await handlers.get('auth:get-status')!(other as IpcMainInvokeEvent);
     assert.deepEqual(result, safeError(new BookingError('FORBIDDEN', '')));
   }
-  const result = await handlers.get('booking:dry-run')!(event, { ...form, dryRun: false });
+  const result = await handlers.get('reservation:manual')!(event, { ...form, dryRun: false });
   assert.deepEqual(result, safeError(new BookingError('INVALID_INPUT', '')));
   assert.equal(handlers.has('auth:get-token'), false);
 });

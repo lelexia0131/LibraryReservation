@@ -4,7 +4,7 @@ import { ensureToken } from '../config/config.js';
 import { BookingError } from '../errors.js';
 
 export const BASE_URL = 'https://booking.lib.zju.edu.cn';
-const transientCodes = new Set(['ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EAI_AGAIN', 'EPIPE', 'ERR_NETWORK']);
+const transientCodes = new Set(['ECONNRESET', 'ECONNABORTED', 'ECONNREFUSED', 'ENOTFOUND', 'ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'EAI_AGAIN', 'EPIPE', 'ERR_NETWORK']);
 
 export class HttpClient {
   private readonly authorization?: string;
@@ -12,7 +12,7 @@ export class HttpClient {
     baseURL: BASE_URL, timeout: 8000, maxRedirects: 0,
     headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', lang: 'zh' },
   }), private readonly sleep: (ms: number) => Promise<unknown> = delay,
-  private readonly onUnauthorized?: () => Promise<void>) {
+  private readonly onUnauthorized?: () => Promise<void>, private readonly queryRetries = 2) {
     this.authorization = token === null ? undefined : `bearer${ensureToken(token)}`;
   }
 
@@ -28,8 +28,15 @@ export class HttpClient {
           headers: { authorization: authRequired ? this.authorization : false, cookie: false },
           timeout: 8000, maxRedirects: 0, signal: options.signal,
         });
+        // Official response interceptor clears the session on business code 10001.
+        if (authRequired && response.data && String(response.data.code) === '10001') {
+          try { await this.onUnauthorized?.(); }
+          catch { throw new BookingError('AUTH_INVALIDATION_FAILED', ''); }
+          throw new BookingError('INVALID_TOKEN', '');
+        }
         return response.data;
       } catch (error) {
+        if (error instanceof BookingError) throw error;
         const status = axios.isAxiosError(error) ? error.response?.status : undefined;
         if (status === 401 && authRequired) {
           try { await this.onUnauthorized?.(); }
@@ -37,10 +44,14 @@ export class HttpClient {
         }
         const transient = axios.isAxiosError(error) && (status !== undefined
           ? [502, 503, 504].includes(status) : transientCodes.has(error.code ?? ''));
-        if (authRequired && !confirm && transient && attempt < 2) { await this.sleep(500 * 2 ** attempt); continue; }
+        if (authRequired && !confirm && transient && !options.signal?.aborted && attempt < this.queryRetries) { await this.sleep(500 * 2 ** attempt); continue; }
+        const retryHeader = axios.isAxiosError(error) ? error.response?.headers['retry-after'] : undefined;
+        const retryText = typeof retryHeader === 'string' || typeof retryHeader === 'number' ? String(retryHeader) : '';
+        const retryAfterMs = /^\d+(\.\d+)?$/.test(retryText) ? Number(retryText) * 1000 : retryText ? Math.max(0, Date.parse(retryText) - Date.now()) : undefined;
         // Never retain AxiosError: it contains headers, token and request body.
         throw new BookingError(confirm && (!status || status >= 500) ? 'CONFIRM_OUTCOME_UNKNOWN' : 'HTTP_ERROR',
-          `${path}: ${status ? `HTTP ${status}` : 'network request failed'}${confirm ? '; not retried. Check the official reservation record before any new submission.' : ''}`);
+          `${path}: ${status ? `HTTP ${status}` : 'network request failed'}${confirm ? '; not retried. Check the official reservation record before any new submission.' : ''}`,
+          undefined, status, Number.isFinite(retryAfterMs) ? retryAfterMs : undefined, transient);
       }
     }
   }

@@ -52,7 +52,14 @@ export function parseReserveList(value: unknown): { list: Area[]; count: number 
   return { count, list: array(data.list, 'list.data.list').map(item => {
     const obj = record(item, 'area');
     if (!['id', 'name', 'premisesName', 'storeyName'].every(key => key in obj)) invalidShape('area fields', obj);
-    return { ...named(obj, 'area'), premisesName: string(obj.premisesName, 'area.premisesName'), storeyName: string(obj.storeyName, 'area.storeyName') };
+    const area: Area = { ...named(obj, 'area'), premisesName: string(obj.premisesName, 'area.premisesName'), storeyName: string(obj.storeyName, 'area.storeyName') };
+    // RoomItem on the official site renders these exact fields as 空闲 / 座位.
+    if (obj.free_num !== undefined && obj.total_num !== undefined) {
+      area.freeCount = Number(id(obj.free_num, 'area.free_num'));
+      area.totalCount = Number(id(obj.total_num, 'area.total_num'));
+      if (!Number.isSafeInteger(area.totalCount) || !Number.isSafeInteger(area.freeCount) || area.freeCount > area.totalCount) invalidShape('area counts', obj);
+    }
+    return area;
   }) };
 }
 export function parseSeatDates(value: unknown): SeatDate[] {

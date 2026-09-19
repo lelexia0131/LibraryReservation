@@ -10,8 +10,10 @@ import { ElectronCredentialCipher } from '../electron/adapters/ElectronCredentia
 import { DesktopController } from '../electron/desktopController.js';
 import { registerIpc } from '../electron/ipc.js';
 import { BookingService } from '../src/domain/BookingService.js';
+import { BookingApi } from '../src/api/bookingApi.js';
+import { AxiosError } from 'axios';
 import { authHarness, FakeBrowser, jwt } from './authFixtures.js';
-import { harness, normalResponse, seat } from './fixtures.js';
+import { area, fixedClock, harness, indexResponse, normalResponse, seat } from './fixtures.js';
 
 app.setPath('userData', join(process.cwd(), '.artifacts', 'integration-profile'));
 void app.whenReady().then(async () => {
@@ -23,19 +25,29 @@ hAuth.respond(() => ({ code: 1, member: { token: jwt(Math.floor(Date.now() / 100
 const provider = new CasTokenProvider(new PersistentCasSession(browser), hAuth.http);
 const auth = new AuthManager(store, provider);
 let unavailable = false;
+let unknownConfirm = false;
 const h = harness(async request => {
   await new Promise(resolve => setTimeout(resolve, 100));
+  if (request.path.endsWith('/index')) return { code: 0, data: { ...indexResponse.data, premises: [{ id: '86', name: '主馆' }] } };
+  if (request.path.endsWith('/list')) return { code: 0, data: { count: 2, list: [
+    { ...area, premisesName: '主馆', free_num: unavailable ? 0 : 26, total_num: 30 },
+    { ...area, id: '908', premisesName: '主馆', name: '南区', free_num: 0, total_num: 20 },
+  ] } };
+  if (request.path.endsWith('/confirm') && unknownConfirm) throw new AxiosError('synthetic timeout', 'ETIMEDOUT', request.config);
   return unavailable && request.path.endsWith('/seat') ? { code: 1, data: [{ ...seat, status: '2', status_name: '已预约' }] } : normalResponse(request);
 });
 const controller = new DesktopController(auth, { openBookingWebsite: async () => {} },
-  () => new BookingService(auth, () => h.api, () => {}));
+  () => new BookingService(auth, () => h.api, () => {}),
+  (_token, signal, authority) => new BookingApi(h.http, fixedClock, authority?.consume, signal));
 const renderer = join(process.cwd(), 'out/renderer/index.html');
-const window = new BrowserWindow({ width: 1000, height: 780, minWidth: 760, minHeight: 600, show: false,
+const window = new BrowserWindow({ width: 1160, height: 900, minWidth: 760, minHeight: 600, show: false,
   webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, preload: join(process.cwd(), 'out/preload.cjs') } });
 window.setMenu(null);
 registerIpc(ipcMain, window, pathToFileURL(renderer).href, controller);
 Object.assign(globalThis, { desktopTest: {
   unavailable: () => { unavailable = true; },
+  available: () => { unavailable = false; },
+  unknown: () => { unknownConfirm = true; },
   requests: () => h.requests.map(request => request.path),
   restored: async () => {
     const before = browser.windows.length;
@@ -50,5 +62,5 @@ Object.assign(globalThis, { desktopTest: {
   },
 } });
 await window.loadFile(renderer);
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => { void controller.shutdown().finally(() => app.quit()); });
 });

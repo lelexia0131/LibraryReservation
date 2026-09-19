@@ -28,8 +28,14 @@ else {
     const auth = new AuthManager(store, new CasTokenProvider(new PersistentCasSession(new ElectronCasBrowserAdapter(host))));
     const website = new BookingWebSessionBootstrap(auth, new ElectronBookingWebBrowserAdapter(host));
     const controller = new DesktopController(auth, website);
+    let shuttingDown = false;
+    app.on('before-quit', event => {
+      if (shuttingDown) return;
+      event.preventDefault(); shuttingDown = true;
+      void controller.shutdown().finally(() => app.quit());
+    });
     const renderer = join(__dirname, 'renderer', 'index.html');
-    mainWindow = new BrowserWindow({ width: 1000, height: 780, minWidth: 760, minHeight: 600, show: false,
+    mainWindow = new BrowserWindow({ width: 1160, height: 900, minWidth: 760, minHeight: 600, show: false,
       title: '浙江大学图书馆预约助手', backgroundColor: '#f5f7fa', icon: join(__dirname, 'icon.ico'),
       webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true,
         devTools: !app.isPackaged, preload: join(__dirname, 'preload.cjs') } });

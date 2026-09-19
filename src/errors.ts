@@ -1,7 +1,17 @@
+export type OperationStage = 'auth' | 'reserve-index' | 'reserve-list' | 'seat-date' | 'seat-list' | 'seat-select' | 'confirm';
 export class BookingError extends Error {
-  constructor(public readonly code: string, message: string) {
+  constructor(public readonly code: string, message: string, public stage?: OperationStage,
+    public readonly httpStatus?: number, public readonly retryAfterMs?: number, public readonly transient = false) {
     super(message);
     this.name = 'BookingError';
+  }
+}
+
+export async function atStage<T>(stage: OperationStage, work: () => Promise<T> | T): Promise<T> {
+  try { return await work(); }
+  catch (error) {
+    if (error instanceof BookingError) { error.stage ??= stage; throw error; }
+    throw new BookingError('UNEXPECTED_ERROR', '', stage);
   }
 }
 
