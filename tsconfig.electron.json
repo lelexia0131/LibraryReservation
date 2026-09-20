@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "lib": ["ES2022", "DOM", "DOM.Iterable"], "noEmit": true },
-  "include": ["src/**/*.ts", "electron/**/*.ts", "renderer/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "electron/**/*.ts", "renderer/**/*.ts", "platforms/**/*.ts", "capacitor.config.ts", "tests/**/*.ts"]
 }

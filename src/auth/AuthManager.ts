@@ -29,6 +29,10 @@ export class AuthManager implements TokenProvider {
   }
 
   getToken(): Promise<string> { return this.acquire(true); }
+  async cancelAuthentication(): Promise<void> {
+    this.controller?.abort();
+    await this.authPromise?.catch(() => {});
+  }
 
   private acquire(interactive: boolean): Promise<string> {
     if (this.mutation) return this.mutation.then(() => this.acquire(interactive));

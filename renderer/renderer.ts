@@ -1,4 +1,4 @@
-import type { LibraryApp, PublicAuthStatus, Reply, Period, Location, LocationView, Scope, AutoMode, AutoView, ReservationView } from '../electron/contracts.js';
+import type { LibraryApp, PublicAuthStatus, Reply, Period, Location, LocationView, Scope, AutoMode, AutoView, ReservationView } from '../src/application/contracts.js';
 
 declare global { interface Window { libraryApp: LibraryApp } }
 const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;

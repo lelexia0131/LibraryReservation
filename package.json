@@ -16,16 +16,24 @@
     "auth:logout": "node --import tsx src/cli/auth.ts logout",
     "booking": "node --env-file-if-exists=.env --import tsx src/cli/booking.ts",
     "booking:dry": "node --env-file-if-exists=.env --import tsx src/cli/booking.ts --dry-run",
-    "typecheck": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -p tsconfig.electron.json && tsc -p tsconfig.shared.json",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "app:build": "npm run typecheck && node scripts/build-app.mjs",
     "app:dev": "npm run app:build && node scripts/app-dev.mjs",
+    "android:build": "npm run typecheck && node scripts/build-android.mjs",
+    "android:sync": "npm run android:build && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "npm run android:sync && cap run android --no-sync",
+    "test:mobile-ui": "npm run app:build && node scripts/test-mobile-ui.mjs",
     "test:desktop": "npm run app:build && node scripts/test-desktop.mjs",
     "dist": "npm run app:build && electron-builder --win nsis --x64"
   },
   "dependencies": {
-    "axios": "^1.20.0"
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "axios": "^1.20.0",
+    "crypto-js": "^4.2.0"
   },
   "build": {
     "appId": "cn.libraryreservation.desktop",
@@ -36,7 +44,11 @@
       "buildResources": "build"
     },
     "files": [
-      "out/**/*",
+      "out/main.cjs",
+      "out/preload.cjs",
+      "out/icon.ico",
+      "out/renderer/**/*",
+      "!node_modules/@capacitor/**/*",
       "package.json"
     ],
     "win": {
@@ -65,9 +77,9 @@
     }
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^26.6.1",
-    "crypto-js": "^4.2.0",
     "electron": "^44.4.2",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",

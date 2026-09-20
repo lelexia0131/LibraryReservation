@@ -15,3 +15,11 @@ test('unknown, malformed and nonnumeric exp never become permanent tokens', () =
     assert.equal(new TokenValidator(() => now).isUsable(token), false);
   }
 });
+test('Base64URL decoder rejects invalid encoding and missing exp, accepts Unicode payloads', () => {
+  for (const payload of ['!', 'a', 'a===', '____', 'e30']) {
+    assert.equal(parseJwtExpiry(`e30.${payload}.sig`), undefined);
+  }
+  const payload = Buffer.from(JSON.stringify({ exp: now / 1000 + 3600, name: '中文😀' })).toString('base64url');
+  assert.equal(parseJwtExpiry(`e30.${payload}.sig`), now + 3600000);
+  assert.throws(() => new TokenValidator(() => now, -1), RangeError);
+});

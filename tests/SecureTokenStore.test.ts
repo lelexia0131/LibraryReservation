@@ -4,7 +4,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EncryptedFileTokenStore, type CredentialCipher } from '../src/auth/SecureTokenStore.js';
+import { EncryptedFileTokenStore, type CredentialCipher } from '../src/auth/stores/EncryptedFileTokenStore.js';
 import { jwt, now } from './authFixtures.js';
 
 // Test-only cipher. Production must supply OS-backed encryption; no key is persisted here.

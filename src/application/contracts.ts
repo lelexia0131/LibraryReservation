@@ -1,7 +1,7 @@
-import type { AuthState } from '../src/auth/AuthManager.js';
-import type { Location, LocationView, Period, Scope } from '../src/domain/AvailabilityService.js';
-import type { AutoMode, AutoState } from '../src/domain/AutoSelectMonitor.js';
-import type { OperationStage } from '../src/errors.js';
+import type { AuthState } from '../auth/AuthManager.js';
+import type { Location, LocationView, Period, Scope } from '../domain/AvailabilityService.js';
+import type { AutoMode, AutoState } from '../domain/AutoSelectMonitor.js';
+import type { OperationStage } from '../errors.js';
 export type { Location, LocationView, Period, Scope, AutoMode };
 export interface AvailabilityView { locations: LocationView[]; scopes: Location[] }
 export interface SeatsView { location: Location; seats: string[]; day: string; startTime: string; endTime: string }

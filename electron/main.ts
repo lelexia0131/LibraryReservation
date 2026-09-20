@@ -4,13 +4,16 @@ import { pathToFileURL } from 'node:url';
 import { AuthManager } from '../src/auth/AuthManager.js';
 import { CasTokenProvider } from '../src/auth/CasTokenProvider.js';
 import { PersistentCasSession } from '../src/auth/PersistentCasSession.js';
-import { EncryptedFileTokenStore } from '../src/auth/SecureTokenStore.js';
+import { EncryptedFileTokenStore } from '../src/auth/stores/EncryptedFileTokenStore.js';
 import { BookingWebSessionBootstrap } from '../src/auth/BookingWebSessionBootstrap.js';
 import { ElectronCredentialCipher } from './adapters/ElectronCredentialCipher.js';
 import { ElectronCasBrowserAdapter, RemoteWindowHost } from './adapters/ElectronCasBrowserAdapter.js';
 import { ElectronBookingWebBrowserAdapter } from './adapters/ElectronBookingWebBrowserAdapter.js';
-import { DesktopController } from './desktopController.js';
+import { LibraryController } from '../src/application/LibraryController.js';
 import { registerIpc } from './ipc.js';
+import { HttpClient } from '../src/api/httpClient.js';
+import { BookingApi } from '../src/api/bookingApi.js';
+import { createAxiosTransport } from '../src/platform/node/AxiosTransport.js';
 
 app.setName('LibraryReservation');
 app.setAppUserModelId('cn.libraryreservation.desktop');
@@ -25,9 +28,11 @@ else {
     Menu.setApplicationMenu(null);
     const host = new RemoteWindowHost();
     const store = new EncryptedFileTokenStore(app.getPath('userData'), new ElectronCredentialCipher(safeStorage));
-    const auth = new AuthManager(store, new CasTokenProvider(new PersistentCasSession(new ElectronCasBrowserAdapter(host))));
+    const transport = createAxiosTransport();
+    const auth = new AuthManager(store, new CasTokenProvider(new PersistentCasSession(new ElectronCasBrowserAdapter(host)), new HttpClient(null, transport)));
     const website = new BookingWebSessionBootstrap(auth, new ElectronBookingWebBrowserAdapter(host));
-    const controller = new DesktopController(auth, website);
+    const controller = new LibraryController(auth, website, (token, signal, authority) =>
+      new BookingApi(new HttpClient(token, transport, undefined, () => auth.invalidateToken(token), 0), undefined, authority?.consume, signal));
     let shuttingDown = false;
     app.on('before-quit', event => {
       if (shuttingDown) return;

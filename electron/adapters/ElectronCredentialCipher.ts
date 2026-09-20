@@ -1,5 +1,5 @@
 import type { safeStorage } from 'electron';
-import type { CredentialCipher } from '../../src/auth/SecureTokenStore.js';
+import type { CredentialCipher } from '../../src/auth/stores/EncryptedFileTokenStore.js';
 
 export class ElectronCredentialCipher implements CredentialCipher {
   constructor(private readonly storage: Pick<typeof safeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>) {}

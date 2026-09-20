@@ -1,3 +1,5 @@
+import { createAxiosTransport } from '../src/platform/node/AxiosTransport.js';
+const testTransport = (options: Parameters<typeof axios.create>[0]) => createAxiosTransport(axios.create(options));
 import { EventEmitter } from 'node:events';
 import axios, { AxiosHeaders } from 'axios';
 import { HttpClient } from '../src/api/httpClient.js';
@@ -65,7 +67,7 @@ export function authHarness(saved: SavedToken | null = null) {
   const browser = new FakeBrowser();
   const requests: Array<{ body: unknown; authorization: unknown; cookie: unknown }> = [];
   let respond: () => unknown = () => ({ code: 1, member: { token: jwt(), mobile: 'synthetic-private' } });
-  const http = new HttpClient(null, axios.create({ adapter: async config => {
+  const http = new HttpClient(null, testTransport({ adapter: async config => {
     requests.push({ body: JSON.parse(config.data), authorization: config.headers.get('authorization'), cookie: config.headers.get('cookie') });
     return { status: 200, statusText: 'OK', headers: new AxiosHeaders(), config, data: await respond() };
   } }));

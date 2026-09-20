@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EnvironmentTokenProvider, loadConfig } from '../src/config/config.js';
+import { loadConfig } from '../src/config/config.js';
+import { EnvironmentTokenProvider } from '../src/auth/EnvironmentTokenProvider.js';
 import { redact } from '../src/errors.js';
 import { config, fakeToken } from './fixtures.js';
 

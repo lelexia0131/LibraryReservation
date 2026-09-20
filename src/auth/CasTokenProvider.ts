@@ -3,7 +3,7 @@ import { ensureToken } from '../config/config.js';
 import { CasTokenExchangeError } from './authErrors.js';
 import type { CasLoginOptions, PersistentCasSession } from './PersistentCasSession.js';
 
-export async function exchangeCasForBookingToken(cas: string, http = new HttpClient(null), signal?: AbortSignal): Promise<string> {
+export async function exchangeCasForBookingToken(cas: string, http: HttpClient, signal?: AbortSignal): Promise<string> {
   if (cas.length < 8 || cas.length > 512 || /\s|[\x00-\x1f\x7f]/.test(cas)) throw new CasTokenExchangeError();
   try {
     const response = await http.post('/api/cas/user', { cas }, { authRequired: false, signal });
@@ -15,7 +15,7 @@ export async function exchangeCasForBookingToken(cas: string, http = new HttpCli
 }
 
 export class CasTokenProvider {
-  constructor(private readonly session: PersistentCasSession, private readonly http = new HttpClient(null)) {}
+  constructor(private readonly session: PersistentCasSession, private readonly http: HttpClient) {}
   authenticate(options: CasLoginOptions, save: (token: string) => Promise<void>): Promise<string> {
     return this.session.authenticate(options, async cas => {
       const token = await exchangeCasForBookingToken(cas, this.http, options.signal);

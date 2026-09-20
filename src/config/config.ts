@@ -1,5 +1,4 @@
 import { BookingError } from '../errors.js';
-import type { TokenProvider } from '../auth/TokenProvider.js';
 export type { TokenProvider } from '../auth/TokenProvider.js';
 
 export interface BookingConfig {
@@ -29,7 +28,7 @@ export function validateConfig(config: BookingConfig): void {
   if (typeof config.dryRun !== 'boolean') throw new BookingError('INVALID_CONFIG', 'dryRun must be boolean.');
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv, args: string[] = []): BookingConfig {
+export function loadConfig(env: Record<string, string | undefined>, args: string[] = []): BookingConfig {
   if (args.some(arg => !['--execute', '--dry-run'].includes(arg))) throw new BookingError('INVALID_CONFIG', 'Supported arguments: --execute, --dry-run.');
   if (env.DRY_RUN && !['true', 'false'].includes(env.DRY_RUN)) throw new BookingError('INVALID_CONFIG', 'DRY_RUN must be true or false.');
   const config = {
@@ -49,8 +48,4 @@ export function ensureToken(token: string): string {
     throw new BookingError('INVALID_TOKEN', 'BOOKING_TOKEN must contain the raw token, without bearer prefix or whitespace.');
   }
   return token;
-}
-export class EnvironmentTokenProvider implements TokenProvider {
-  constructor(private readonly env: NodeJS.ProcessEnv = process.env) {}
-  async getToken(): Promise<string> { return ensureToken(this.env.BOOKING_TOKEN ?? ''); }
 }

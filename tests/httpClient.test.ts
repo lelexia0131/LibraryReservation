@@ -1,3 +1,5 @@
+import { createAxiosTransport } from '../src/platform/node/AxiosTransport.js';
+const testTransport = (options: Parameters<typeof axios.create>[0]) => createAxiosTransport(axios.create(options));
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { harness, httpFailure, fakeToken } from './fixtures.js';
@@ -50,7 +52,7 @@ for (const path of ['/api/Seat/date', '/api/Seat/confirm']) test(`401 invalidate
   const h = authHarness({ token: jwt(), savedAt: now });
   const token = await h.auth.getToken();
   let requests = 0;
-  const http = new HttpClient(token, axios.create({ adapter: async config => {
+  const http = new HttpClient(token, testTransport({ adapter: async config => {
     requests++;
     throw new AxiosError('private transport data', 'ERR_BAD_REQUEST', config, undefined,
       { status: 401, statusText: 'Unauthorized', headers: new AxiosHeaders(), data: { token }, config });
@@ -63,7 +65,7 @@ for (const path of ['/api/Seat/date', '/api/Seat/confirm']) test(`401 invalidate
 
 test('unauthenticated CAS exchange removes inherited auth headers and never retries', async () => {
   let requests = 0;
-  const http = new HttpClient(fakeToken, axios.create({ headers: { authorization: 'secret-default', cookie: 'secret-cookie' }, adapter: async config => {
+  const http = new HttpClient(fakeToken, testTransport({ headers: { authorization: 'secret-default', cookie: 'secret-cookie' }, adapter: async config => {
     requests++;
     assert.equal(config.headers.get('authorization'), false);
     assert.equal(config.headers.get('cookie'), false);

@@ -1,5 +1,4 @@
 import { BookingApi } from '../api/bookingApi.js';
-import { HttpClient } from '../api/httpClient.js';
 import { ensureToken, validateConfig, type BookingConfig, type TokenProvider } from '../config/config.js';
 import { BookingError, redact } from '../errors.js';
 import { resolveTargetArea } from './areaResolver.js';
@@ -9,8 +8,7 @@ import { findTargetSeat, validateSeatAvailable } from './seatSelector.js';
 export class BookingService {
   private started = false;
   constructor(private readonly tokenProvider: TokenProvider,
-    private readonly apiFactory: (token: string) => BookingApi = token => new BookingApi(new HttpClient(token, undefined, undefined,
-      () => this.tokenProvider.invalidateToken?.(token) ?? Promise.resolve())),
+    private readonly apiFactory: (token: string) => BookingApi,
     private readonly logger: (message: string) => void = console.log) {}
 
   async runBooking(config: BookingConfig) {

@@ -1,4 +1,4 @@
-import { createCipheriv } from 'node:crypto';
+import CryptoJS from 'crypto-js';
 
 export interface Clock { now(): Date }
 export const systemClock: Clock = { now: () => new Date() };
@@ -13,7 +13,7 @@ export function buildDailyAesKey(date: Date): string {
   return day + [...day].reverse().join('');
 }
 export function encryptBookingPayload(payload: object, date: Date = systemClock.now()): string {
-  const iv = Buffer.from(BOOKING_IV, 'utf8');
-  const cipher = createCipheriv('aes-128-cbc', Buffer.from(buildDailyAesKey(date), 'utf8'), iv);
-  return Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]).toString('base64');
+  return CryptoJS.AES.encrypt(JSON.stringify(payload), CryptoJS.enc.Utf8.parse(buildDailyAesKey(date)), {
+    iv: CryptoJS.enc.Utf8.parse(BOOKING_IV), mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7,
+  }).ciphertext.toString(CryptoJS.enc.Base64);
 }

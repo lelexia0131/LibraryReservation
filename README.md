@@ -1,6 +1,6 @@
 # 浙江大学图书馆预约助手
 
-Windows x64 桌面应用。选择日期和时间后自动发现有空位的位置，展开馆舍、楼层和区域，点击空闲座位手动预约；也支持主馆、所有场馆、自定义范围三种一键选择。无空位时每 15 秒继续查询，可随时停止。
+Windows x64 桌面应用，并提供 Capacitor Android 第一阶段工程。两端复用同一个 TypeScript 应用核心和 UI。选择日期和时间后自动发现有空位的位置，展开馆舍、楼层和区域，点击空闲座位手动预约；也支持主馆、所有场馆、自定义范围三种一键选择。无空位时每 15 秒继续查询，可随时停止。Android 尚待真机验证，构建成功不代表登录或预约已实际验收。
 
 第四阶段允许用户在 App 中主动预约。所有自动化测试的预约请求只发送到内存 synthetic adapter，从未向官网提交真实预约。桌面启动测试曾出现 Electron 原生崩溃，按用户要求停止继续打开 App 测试；不能将安装包构建成功视为桌面运行验收通过。详见 [第四阶段交付记录](docs/phase4.md)。
 
@@ -35,17 +35,33 @@ npm run dist
 
 `npm run test:desktop` 是可选的真实 Electron 集成测试，使用独立测试用户目录、系统加密和合成接口；不使用用户的真实登录数据，也不调用真实官网预约接口。本次运行在窗口初始化时未完成，已停止，不再重复启动测试。
 
-`out/` 是桌面构建，`dist/` 是 NSIS 安装包和 `win-unpacked/`。安装包不含测试入口、源码、`.env` 或研究用官网 bundle。
+`out/main.cjs`、`out/preload.cjs` 和 `out/renderer/` 是桌面构建；`out/android/` 是独立的 Android UI 构建，私有核心另写入 Android 原生 assets。`dist/` 是 NSIS 安装包和 `win-unpacked/`。Windows 安装包不含 Android web/core 输出、测试入口、源码、`.env` 或研究用官网 bundle。
+
+## Android
+
+需要 JDK 21、Android SDK 36 和更新的 Android System WebView（必须支持 origin/main-frame 限制的 WebMessageListener）。最低 Android API 24。
+
+```powershell
+npm run android:build    # 构建 UI 和隔离的共享核心
+npm run android:sync     # 构建并同步 Capacitor Android 项目
+npm run android:open     # 在 Android Studio 打开
+npm run android:run      # 同步、构建并安装到选择的设备
+```
+
+原生编译和检查：在 `JAVA_HOME` 指向 JDK 21、`ANDROID_HOME` 指向 SDK 后执行 `android\gradlew.bat -p android assembleDebug testDebugUnitTest lintDebug`。Debug APK 输出到 `android/app/build/outputs/apk/debug/app-debug.apk`，不是发行签名包。
+
+Android UI 只有白名单业务桥，Controller 在独立的离线私有 WebView 中执行，token 通过 Android Keystore 加密保存。CAS 在无原生桥的单独窗口完成；Android 的“打开图书馆”使用系统浏览器，不传递 token，可能需要在那里另行登录。前台自动任务复用原状态机；应用退到后台会停止，返回前台不会自动重新预约。详情与真机验收项目见 [Android 架构与验证记录](docs/android-port.md)。
 
 ## 结构与安全边界
 
 - `src/domain/AvailabilityService.ts`：普通座位分类、串行分页、空位统计及实时座位读取；不向 BookingService 塞发现逻辑。
 - `src/domain/ReservationService.ts`：根据座位编号实时重查、检查空闲状态、一次提交，结果不明时停止。
 - `src/domain/AutoSelectMonitor.ts`：串行状态机、15 秒等待、429/网络退避、停止清理。
-- `electron/ConfirmationAuthority.ts`：主进程创建的一次性提交权限，仅手动预约和启动一键选择入口创建。
-- `electron/desktopController.ts`：输入 allowlist、显示数据投影、10 秒位置缓存和安全中文错误。
+- `src/application/contracts.ts`：跨平台 LibraryApp 协议，renderer 仅依赖此协议。
+- `src/application/ConfirmationAuthority.ts`：受信任应用层创建的一次性提交权限，仅手动预约和启动一键选择入口创建。
+- `src/application/LibraryController.ts`：两端唯一 Controller，输入 allowlist、显示数据投影、10 秒位置缓存和安全中文错误。
 - `src/api/`：保留现有 HttpClient、解析器、AES 提交；增加安全 stage、HTTP 状态和 Retry-After 元数据。
-- `src/auth/`、`src/crypto/`、远程窗口和 safeStorage 架构保持不变。
+- `src/auth/SecureTokenStore.ts` 只定义接口；Windows 的加密文件实现位于 `src/auth/stores/`，继续使用原来的 safeStorage。`src/platform/node/` 拥有 Axios 和环境变量适配器，Android 原生适配器位于 `platforms/android/` 与 `android/`。
 
 固定 IPC：`auth:get-status`、`auth:login`、`auth:logout`、`booking:open-web`、`availability:list`、`availability:seats`、`reservation:manual`、`autoselect:start`、`autoselect:stop`、`autoselect:status`。renderer 得到业务名称、座位号、状态和安全提示，不接收 token、cookie、CAS、authorization、seat_id、segment 或密文。
 
@@ -80,6 +96,6 @@ npm run booking:dry
 
 认证通过 HttpClient 统一注入 `authorization: "bearer" + rawToken` 到 header/body。8 秒超时，不跟随重定向。CLI 普通查询仍保留原有有限重试；confirm 始终不重试。
 
-AES 仍使用 Node crypto 的 AES-128-CBC/PKCS7，key 为当前本地日期 `YYYYMMDD + reverse(YYYYMMDD)`，IV 为 16 字节 `ZZWBKJ_ZHIHUAWEI`。业务明文仅 seat_id、segment。预约日期与加密当日日期分离，密文在提交时生成。
+AES 使用跨平台 CryptoJS 的 AES-128-CBC/PKCS7，与原 Node crypto 实现通过固定 Base64 和逐字节兼容测试。key 为当前本地日期 `YYYYMMDD + reverse(YYYYMMDD)`，IV 为 16 字节 `ZZWBKJ_ZHIHUAWEI`。业务明文仅 seat_id、segment。预约日期与加密当日日期分离，密文在提交时生成。
 
 本次不执行 commit。

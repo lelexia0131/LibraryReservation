@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import { ElectronCredentialCipher } from '../electron/adapters/ElectronCredentialCipher.js';
 import { allowedRemoteUrl, blockedRemoteRequest, handleNavigation, upgradeOfficialUrl } from '../electron/adapters/navigationPolicy.js';
-import { DesktopController, safeError, validateForm } from '../electron/desktopController.js';
+import { LibraryController, safeError, validateForm } from '../src/application/LibraryController.js';
 import { registerIpc, trustedSender } from '../electron/ipc.js';
 import { BookingApi } from '../src/api/bookingApi.js';
 import { BookingService } from '../src/domain/BookingService.js';
@@ -12,8 +12,20 @@ import { REAL_CONFIRM_ENABLED } from '../src/config/runtimePolicy.js';
 import { config, fakeToken, harness, normalResponse, seat } from './fixtures.js';
 import { BookingError } from '../src/errors.js';
 import type { AuthStatus } from '../src/auth/AuthManager.js';
+import { authHarness, deferred, login } from './authFixtures.js';
 
 const { dryRun: _dryRun, ...form } = config;
+test('shared controller shutdown cancels interactive login instead of delaying Electron exit', async () => {
+  const h = authHarness();
+  const loaded = deferred<void>();
+  h.browser.setup = window => { window.onLoad = () => { window.navigate(login); loaded.resolve(); }; window.onShow = () => {}; };
+  const controller = new LibraryController(h.auth, { openBookingWebsite: async () => {} }, () => new BookingApi(h.http));
+  const cancelled = assert.rejects(controller.login(), { code: 'AUTH_CANCELLED' });
+  await loaded.promise;
+  await controller.shutdown(); await cancelled;
+  assert.equal(h.browser.windows[0]?.closes, 1);
+  assert.equal(h.store.value, null);
+});
 function desktop(respond = normalResponse) {
   let status: AuthStatus = { state: 'AUTHENTICATED', hasCachedToken: true };
   const h = harness(respond);
@@ -22,7 +34,8 @@ function desktop(respond = normalResponse) {
     getToken: async () => fakeToken,
     logout: async () => { status = { state: 'LOGIN_REQUIRED', hasCachedToken: false }; },
   };
-  const controller = new DesktopController(auth, { openBookingWebsite: async () => {} },
+  const controller = new LibraryController(auth, { openBookingWebsite: async () => {} },
+    () => h.api,
     () => new BookingService(auth, () => h.api, () => {}));
   return { controller, ...h };
 }

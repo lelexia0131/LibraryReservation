@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { channels, type LibraryApp } from './contracts.js';
+import { channels, type LibraryApp } from '../src/application/contracts.js';
 
 const api: LibraryApp = {
   getAuthStatus: () => ipcRenderer.invoke(channels.status),

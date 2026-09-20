@@ -1,3 +1,5 @@
+import { createAxiosTransport } from '../src/platform/node/AxiosTransport.js';
+const testTransport = (options: Parameters<typeof axios.create>[0]) => createAxiosTransport(axios.create(options));
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setImmediate as tick } from 'node:timers/promises';
@@ -9,8 +11,8 @@ import { BookingError } from '../src/errors.js';
 import { AvailabilityService, locationOf, type Period } from '../src/domain/AvailabilityService.js';
 import { ReservationService } from '../src/domain/ReservationService.js';
 import { AutoSelectMonitor, waitForPoll, type AutoRequest } from '../src/domain/AutoSelectMonitor.js';
-import { ConfirmationAuthority } from '../electron/ConfirmationAuthority.js';
-import { DesktopController, safeError } from '../electron/desktopController.js';
+import { ConfirmationAuthority } from '../src/application/ConfirmationAuthority.js';
+import { LibraryController, safeError } from '../src/application/LibraryController.js';
 import { area, config, fakeToken, fixedClock, indexResponse, normalResponse, seat, type Request } from './fixtures.js';
 
 const period: Period = { day: config.targetDate, startTime: '08:00', endTime: '22:00' };
@@ -22,7 +24,7 @@ async function until(check: () => boolean): Promise<void> {
 }
 function setup(respond: (request: Request) => unknown = normalResponse) {
   const requests: Request[] = [];
-  const transport = axios.create({ adapter: async config => {
+  const transport = testTransport({ adapter: async config => {
     const request: Request = { path: config.url!, body: JSON.parse(config.data), config };
     requests.push(request);
     return { data: await respond(request), status: 200, statusText: 'OK', headers: new AxiosHeaders(), config };
@@ -47,7 +49,7 @@ function setup(respond: (request: Request) => unknown = normalResponse) {
   let loggedIn = true;
   const auth = { getStatus: () => ({ state: loggedIn ? 'AUTHENTICATED' as const : 'LOGIN_REQUIRED' as const, hasCachedToken: loggedIn }),
     getToken: async () => fakeToken, logout: async () => { loggedIn = false; } };
-  const desktop = new DesktopController(auth, { openBookingWebsite: async () => {} }, undefined,
+  const desktop = new LibraryController(auth, { openBookingWebsite: async () => {} },
     (_token, signal, authority) => factory(signal, authority));
   return { requests, factory, api, discovery, reservation, monitor, controller, waits, releases, desktop };
 }
@@ -296,7 +298,7 @@ test('ordinary category missing is diagnosed at reserve-index before listing', a
 });
 test('business login invalidation clears auth once, does not replay, and reports safe auth errors', async () => {
   let clears = 0, calls = 0;
-  const http = new HttpClient(fakeToken, axios.create({ adapter: async config => {
+  const http = new HttpClient(fakeToken, testTransport({ adapter: async config => {
     calls++; return { data: { code: '10001', msg: fakeToken }, status: 200, statusText: 'OK', headers: {}, config };
   } }), undefined, async () => { clears++; });
   await assert.rejects(new BookingApi(http).fetchReserveIndex(), { code: 'INVALID_TOKEN', stage: 'reserve-index' });
@@ -307,4 +309,32 @@ test('read-only discovery APIs cannot consume a confirmation authority', async (
   const api = h.factory(new AbortController().signal);
   await assert.rejects(api.confirmSeat({ seatId: seat.id, segment: '411' }), { code: 'REAL_CONFIRM_DISABLED' });
   assert.equal(h.requests.length, 0);
+});
+test('shutdown joins an in-flight manual confirm and preserves its receipt', async () => {
+  let release!: () => void;
+  const h = setup(async request => {
+    if (request.path.endsWith('/confirm')) await new Promise<void>(resolve => { release = resolve; });
+    return normalResponse(request);
+  });
+  const booking = h.desktop.reserveManual({ ...period, location, seat: seat.no });
+  await until(() => Boolean(release));
+  let finished = false;
+  const shutdown = h.desktop.shutdown().then(() => { finished = true; });
+  await tick(); assert.equal(finished, false);
+  release(); assert.equal((await booking).success, true); await shutdown;
+  assert.equal(confirms(h).length, 1);
+  await assert.rejects(h.desktop.reserveManual({ ...period, location, seat: seat.no }), { code: 'STOPPED' });
+});
+test('suspending during manual revalidation aborts before confirm', async () => {
+  let release!: () => void;
+  const h = setup(async request => {
+    if (request.path.endsWith('/seat')) await new Promise<void>(resolve => { release = resolve; });
+    return normalResponse(request);
+  });
+  const booking = assert.rejects(h.desktop.reserveManual({ ...period, location, seat: seat.no }), { code: 'STOPPED' });
+  await until(() => Boolean(release));
+  const suspend = h.desktop.suspend(); release(); await Promise.all([booking, suspend]);
+  assert.equal(confirms(h).length, 0);
+  h.desktop.resume();
+  assert.equal(h.desktop.autoStatus().state, 'IDLE');
 });

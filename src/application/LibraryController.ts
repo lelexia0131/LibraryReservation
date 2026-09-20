@@ -1,14 +1,13 @@
-import type { AuthManager } from '../src/auth/AuthManager.js';
-import type { BookingWebSessionBootstrap } from '../src/auth/BookingWebSessionBootstrap.js';
-import { BookingService } from '../src/domain/BookingService.js';
-import { isDay, isTime, type BookingConfig } from '../src/config/config.js';
-import { atStage, BookingError, redact, type OperationStage } from '../src/errors.js';
-import { BookingApi } from '../src/api/bookingApi.js';
-import { HttpClient } from '../src/api/httpClient.js';
-import type { Area, BookingResult } from '../src/api/types.js';
-import { AvailabilityService, locationOf, type Location, type Period, type Scope } from '../src/domain/AvailabilityService.js';
-import { ReservationService } from '../src/domain/ReservationService.js';
-import { AutoSelectMonitor, type AutoRequest } from '../src/domain/AutoSelectMonitor.js';
+import type { AuthManager } from '../auth/AuthManager.js';
+import type { BookingWebSessionBootstrap } from '../auth/BookingWebSessionBootstrap.js';
+import { BookingService } from '../domain/BookingService.js';
+import { isDay, isTime, type BookingConfig } from '../config/config.js';
+import { atStage, BookingError, redact, type OperationStage } from '../errors.js';
+import { BookingApi } from '../api/bookingApi.js';
+import type { Area, BookingResult } from '../api/types.js';
+import { AvailabilityService, locationOf, type Location, type Period, type Scope } from '../domain/AvailabilityService.js';
+import { ReservationService } from '../domain/ReservationService.js';
+import { AutoSelectMonitor, type AutoRequest } from '../domain/AutoSelectMonitor.js';
 import { ConfirmationAuthority } from './ConfirmationAuthority.js';
 import type { AvailabilityView, AutoView, PublicAuthStatus, QueryResult, Reply, ReservationView, SeatsView } from './contracts.js';
 
@@ -107,7 +106,7 @@ export function validateForm(value: unknown): BookingConfig {
     targetArea: (input.targetArea as string | undefined)?.trim() || undefined, dryRun: true };
 }
 
-export class DesktopController {
+export class LibraryController {
   private busy = false;
   private readonly monitor: AutoSelectMonitor;
   private cache?: { key: string; at: number; value: AvailabilityView };
@@ -115,11 +114,12 @@ export class DesktopController {
   private action?: AbortController;
   private taskVersion = 0;
   private closed = false;
-  constructor(private readonly auth: Pick<AuthManager, 'getStatus' | 'getToken' | 'logout'> & Partial<Pick<AuthManager, 'invalidateToken'>>,
+  private suspended = false;
+  private operation?: Promise<unknown>;
+  constructor(private readonly auth: Pick<AuthManager, 'getStatus' | 'getToken' | 'logout'> & Partial<Pick<AuthManager, 'invalidateToken' | 'cancelAuthentication'>>,
     private readonly website: Pick<BookingWebSessionBootstrap, 'openBookingWebsite'>,
-    private readonly createService = () => new BookingService(auth, undefined, () => {}),
-    private readonly apiFactory = (token: string, signal: AbortSignal, authority?: ConfirmationAuthority) =>
-      new BookingApi(new HttpClient(token, undefined, undefined, () => auth.invalidateToken?.(token) ?? Promise.resolve(), 0), undefined, authority?.consume, signal)) {
+    private readonly apiFactory: (token: string, signal: AbortSignal, authority?: ConfirmationAuthority) => BookingApi,
+    private readonly createService = () => new BookingService(auth, token => apiFactory(token, new AbortController().signal), () => {})) {
     this.monitor = new AutoSelectMonitor(signal => this.services(signal, true), error => { safeError(error, console.warn); });
   }
 
@@ -132,7 +132,7 @@ export class DesktopController {
   }
   async openWebsite(): Promise<void> { return this.exclusive(() => this.website.openBookingWebsite()); }
   private async services(signal: AbortSignal, confirm = false) {
-    if (this.closed || signal.aborted) throw new BookingError('STOPPED', '');
+    if (this.closed || this.suspended || signal.aborted) throw new BookingError('STOPPED', '');
     if (this.status().state !== 'AUTHENTICATED') throw new BookingError('LOGIN_REQUIRED', '', 'auth');
     const token = await atStage('auth', () => this.auth.getToken());
     const api = this.apiFactory(token, signal, confirm ? new ConfirmationAuthority(signal) : undefined);
@@ -189,7 +189,7 @@ export class DesktopController {
     return this.exclusive(async () => {
       const version = ++this.taskVersion;
       await this.monitor.stop();
-      if (this.closed || version !== this.taskVersion) throw new BookingError('STOPPED', '');
+      if (this.closed || this.suspended || version !== this.taskVersion) throw new BookingError('STOPPED', '');
       if (this.status().state !== 'AUTHENTICATED') throw new BookingError('LOGIN_REQUIRED', '', 'auth');
       this.cache = undefined; this.autoPeriod = period;
       this.monitor.start({ ...period, mode: input.mode as AutoRequest['mode'], scopes });
@@ -205,7 +205,16 @@ export class DesktopController {
       message: status.error ? safeError(status.error).error.message : labels[status.state],
       ...(status.result && status.area && this.autoPeriod ? { result: resultView(status.result, status.area, this.autoPeriod, '') } : {}) };
   }
-  async shutdown(): Promise<void> { this.closed = true; this.taskVersion++; this.action?.abort(); await this.monitor.stop(); }
+  async suspend(): Promise<void> {
+    this.suspended = true; this.taskVersion++; this.action?.abort();
+    await this.monitor.stop();
+    await this.operation?.catch(() => {});
+  }
+  resume(): void { if (!this.closed) this.suspended = false; }
+  async shutdown(): Promise<void> {
+    this.closed = true;
+    await Promise.all([this.suspend(), this.auth.cancelAuthentication?.()]);
+  }
   async query(input: unknown): Promise<QueryResult> {
     const config = validateForm(input);
     return this.exclusive(async () => {
@@ -224,8 +233,10 @@ export class DesktopController {
     });
   }
   private async exclusive<T>(work: () => Promise<T>): Promise<T> {
+    if (this.closed || this.suspended) throw new BookingError('STOPPED', '');
     if (this.busy) throw new BookingError('BUSY', '');
     this.busy = true;
-    try { return await work(); } finally { this.busy = false; }
+    try { const operation = work(); this.operation = operation; return await operation; }
+    finally { this.busy = false; this.operation = undefined; }
   }
 }

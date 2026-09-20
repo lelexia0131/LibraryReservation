@@ -1,11 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createDecipheriv } from 'node:crypto';
+import { createCipheriv, createDecipheriv } from 'node:crypto';
 import CryptoJS from 'crypto-js';
 import { BOOKING_IV, buildDailyAesKey, encryptBookingPayload } from '../src/crypto/bookingCrypto.js';
 
 const date = new Date(2026, 8, 18, 12);
 const payload = { seat_id: '80023', segment: '411' };
+test('fixed ciphertext remains byte-for-byte compatible with the original Node implementation', () => {
+  const expected = 'yYQYOjA95iLSLoU6Lc0LB6r02fMhc7yfn3wEhrGA7WDFf7yO1eIfmvJ+DVQdyDgj';
+  assert.equal(encryptBookingPayload(payload, date), expected);
+  for (const value of [payload, { seat_id: '11', segment: '91', test: '中文 UTF-8' }]) {
+    const original = createCipheriv('aes-128-cbc', buildDailyAesKey(date), BOOKING_IV);
+    assert.equal(encryptBookingPayload(value, date), Buffer.concat([original.update(JSON.stringify(value), 'utf8'), original.final()]).toString('base64'));
+  }
+});
 test('daily key uses local current date and has 16 ASCII bytes', () => {
   assert.equal(buildDailyAesKey(date), '2026091881906202');
   assert.equal(Buffer.byteLength(buildDailyAesKey(date)), 16);

@@ -5,9 +5,9 @@ import { pathToFileURL } from 'node:url';
 import { AuthManager } from '../src/auth/AuthManager.js';
 import { CasTokenProvider } from '../src/auth/CasTokenProvider.js';
 import { PersistentCasSession } from '../src/auth/PersistentCasSession.js';
-import { EncryptedFileTokenStore } from '../src/auth/SecureTokenStore.js';
+import { EncryptedFileTokenStore } from '../src/auth/stores/EncryptedFileTokenStore.js';
 import { ElectronCredentialCipher } from '../electron/adapters/ElectronCredentialCipher.js';
-import { DesktopController } from '../electron/desktopController.js';
+import { LibraryController } from '../src/application/LibraryController.js';
 import { registerIpc } from '../electron/ipc.js';
 import { BookingService } from '../src/domain/BookingService.js';
 import { BookingApi } from '../src/api/bookingApi.js';
@@ -36,9 +36,9 @@ const h = harness(async request => {
   if (request.path.endsWith('/confirm') && unknownConfirm) throw new AxiosError('synthetic timeout', 'ETIMEDOUT', request.config);
   return unavailable && request.path.endsWith('/seat') ? { code: 1, data: [{ ...seat, status: '2', status_name: '已预约' }] } : normalResponse(request);
 });
-const controller = new DesktopController(auth, { openBookingWebsite: async () => {} },
-  () => new BookingService(auth, () => h.api, () => {}),
-  (_token, signal, authority) => new BookingApi(h.http, fixedClock, authority?.consume, signal));
+const controller = new LibraryController(auth, { openBookingWebsite: async () => {} },
+  (_token, signal, authority) => new BookingApi(h.http, fixedClock, authority?.consume, signal),
+  () => new BookingService(auth, () => h.api, () => {}));
 const renderer = join(process.cwd(), 'out/renderer/index.html');
 const window = new BrowserWindow({ width: 1160, height: 900, minWidth: 760, minHeight: 600, show: false,
   webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, preload: join(process.cwd(), 'out/preload.cjs') } });

@@ -5,7 +5,9 @@ export function parseJwtExpiry(token: string): number | undefined {
   const parts = token.split('.');
   if (parts.length !== 3 || !parts.every(part => /^[A-Za-z0-9_-]+$/.test(part))) return undefined;
   try {
-    const payload: unknown = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8'));
+    const base64 = parts[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+    const payload: unknown = JSON.parse(new TextDecoder().decode(bytes));
     const exp = payload && typeof payload === 'object' && 'exp' in payload ? payload.exp : undefined;
     return typeof exp === 'number' && Number.isSafeInteger(exp) && exp >= 0 && Number.isSafeInteger(exp * 1000) ? exp * 1000 : undefined;
   } catch { return undefined; }

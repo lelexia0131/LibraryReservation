@@ -6,12 +6,14 @@ import { AuthManager } from './AuthManager.js';
 import { CasTokenProvider } from './CasTokenProvider.js';
 import { PersistentCasSession } from './PersistentCasSession.js';
 import { AuthError, adapterUnavailable } from './authErrors.js';
+import { HttpClient } from '../api/httpClient.js';
+import { createAxiosTransport } from '../platform/node/AxiosTransport.js';
 
 export interface DesktopAuthAdapters { store: SecureTokenStore; browser: CasBrowserAdapter }
 
 export function createPersistentAuth(adapters?: DesktopAuthAdapters, logger?: (message: string) => void): AuthManager {
   if (!adapters) throw adapterUnavailable();
-  return new AuthManager(adapters.store, new CasTokenProvider(new PersistentCasSession(adapters.browser)), undefined, undefined, logger);
+  return new AuthManager(adapters.store, new CasTokenProvider(new PersistentCasSession(adapters.browser), new HttpClient(null, createAxiosTransport())), undefined, undefined, logger);
 }
 
 // Desktop hosts default to persistent-cas; the existing Node CLI explicitly defaults to env.

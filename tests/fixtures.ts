@@ -1,3 +1,5 @@
+import { createAxiosTransport } from '../src/platform/node/AxiosTransport.js';
+const testTransport = (options: Parameters<typeof axios.create>[0]) => createAxiosTransport(axios.create(options));
 import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios';
 import { HttpClient } from '../src/api/httpClient.js';
 import { BookingApi } from '../src/api/bookingApi.js';
@@ -25,7 +27,7 @@ export interface Request { path: string; body: Record<string, unknown>; config: 
 export function harness(respond: (request: Request, call: number) => unknown, clock = fixedClock) {
   const requests: Request[] = [];
   const waits: number[] = [];
-  const transport = axios.create({ adapter: async requestConfig => {
+  const transport = testTransport({ adapter: async requestConfig => {
     const request = { path: requestConfig.url!, body: JSON.parse(requestConfig.data), config: requestConfig };
     requests.push(request);
     return { data: await respond(request, requests.length), status: 200, statusText: 'OK', headers: new AxiosHeaders(), config: requestConfig };

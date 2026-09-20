@@ -1,17 +1,15 @@
-import axios, { type AxiosInstance } from 'axios';
-import { setTimeout as delay } from 'node:timers/promises';
+import { HttpTransportError, type HttpTransport } from './HttpTransport.js';
 import { ensureToken } from '../config/config.js';
 import { BookingError } from '../errors.js';
 
 export const BASE_URL = 'https://booking.lib.zju.edu.cn';
 const transientCodes = new Set(['ECONNRESET', 'ECONNABORTED', 'ECONNREFUSED', 'ENOTFOUND', 'ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'EAI_AGAIN', 'EPIPE', 'ERR_NETWORK']);
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 export class HttpClient {
   private readonly authorization?: string;
-  constructor(token: string | null, private readonly transport: AxiosInstance = axios.create({
-    baseURL: BASE_URL, timeout: 8000, maxRedirects: 0,
-    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', lang: 'zh' },
-  }), private readonly sleep: (ms: number) => Promise<unknown> = delay,
+  constructor(token: string | null, private readonly transport: HttpTransport,
+  private readonly sleep: (ms: number) => Promise<unknown> = delay,
   private readonly onUnauthorized?: () => Promise<void>, private readonly queryRetries = 2) {
     this.authorization = token === null ? undefined : `bearer${ensureToken(token)}`;
   }
@@ -29,23 +27,24 @@ export class HttpClient {
           timeout: 8000, maxRedirects: 0, signal: options.signal,
         });
         // Official response interceptor clears the session on business code 10001.
-        if (authRequired && response.data && String(response.data.code) === '10001') {
+        if (authRequired && response.data && typeof response.data === 'object' && 'code' in response.data && String(response.data.code) === '10001') {
           try { await this.onUnauthorized?.(); }
           catch { throw new BookingError('AUTH_INVALIDATION_FAILED', ''); }
           throw new BookingError('INVALID_TOKEN', '');
         }
         return response.data;
       } catch (error) {
+        if (!confirm && options.signal?.aborted) throw new BookingError('STOPPED', '');
         if (error instanceof BookingError) throw error;
-        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        const status = error instanceof HttpTransportError ? error.status : undefined;
         if (status === 401 && authRequired) {
           try { await this.onUnauthorized?.(); }
           catch { throw new BookingError('AUTH_INVALIDATION_FAILED', 'Rejected token could not be cleared; request not retried.'); }
         }
-        const transient = axios.isAxiosError(error) && (status !== undefined
+        const transient = error instanceof HttpTransportError && (status !== undefined
           ? [502, 503, 504].includes(status) : transientCodes.has(error.code ?? ''));
         if (authRequired && !confirm && transient && !options.signal?.aborted && attempt < this.queryRetries) { await this.sleep(500 * 2 ** attempt); continue; }
-        const retryHeader = axios.isAxiosError(error) ? error.response?.headers['retry-after'] : undefined;
+        const retryHeader = error instanceof HttpTransportError ? error.retryAfter : undefined;
         const retryText = typeof retryHeader === 'string' || typeof retryHeader === 'number' ? String(retryHeader) : '';
         const retryAfterMs = /^\d+(\.\d+)?$/.test(retryText) ? Number(retryText) * 1000 : retryText ? Math.max(0, Date.parse(retryText) - Date.now()) : undefined;
         // Never retain AxiosError: it contains headers, token and request body.
