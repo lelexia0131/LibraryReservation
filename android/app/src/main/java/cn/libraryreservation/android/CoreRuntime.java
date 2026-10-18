@@ -32,7 +32,9 @@ public final class CoreRuntime {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private WebView core;
     private AndroidSecureTokenStore store;
+    private AndroidSecureTokenStore credentials;
     private final AndroidHttpTransport http = new AndroidHttpTransport();
+    private final AndroidCasHttpTransport casHttp = new AndroidCasHttpTransport();
     private final ExecutorService storage = Executors.newSingleThreadExecutor();
     private record PendingCall(String command, Consumer<JSONObject> done) { }
     private final Map<String, PendingCall> replies = new HashMap<>();
@@ -58,6 +60,7 @@ public final class CoreRuntime {
                 Log.i("CoreRuntime", "[CoreRuntime] featureCheck webMessageListener=true");
                 stage = "secureStoreCreate";
                 store = new AndroidSecureTokenStore(activity);
+                credentials = new AndroidSecureTokenStore(activity, true);
                 stage = "privateWebViewCreate";
                 core = new WebView(activity);
                 LockedWebView.configure(core);
@@ -178,7 +181,7 @@ public final class CoreRuntime {
         initialDocumentPending.set(false);
         ui.removeCallbacks(startupTimer);
         if (cas != null) cas.close();
-        http.close(); storage.shutdown(); queued.clear();
+        http.close(); casHttp.close(); storage.shutdown(); queued.clear();
         for (var reply : replies.values()) reply.done().accept(failure(reply.command()));
         replies.clear();
         if (core != null) {
@@ -225,14 +228,18 @@ public final class CoreRuntime {
                     switch (method) {
                         case "http": http.post(args, result -> resolved(requestId, result, null)); return;
                         case "httpCancel": http.cancel(args.getString("requestId")); break;
+                        case "casHttp": casHttp.request(args, result -> resolved(requestId, result, null)); return;
+                        case "casHttpCancel": casHttp.cancel(args.getString("requestId")); break;
+                        case "credentialsGet": case "credentialsSet": case "credentialsClear":
                         case "storeGet": case "storeSet": case "storeClear":
                             storage.execute(() -> {
                                 try {
                                     Object result = null;
-                                    if (method.equals("storeGet")) result = store.get();
-                                    else if (method.equals("storeSet")) store.set(args); else store.clear();
+                                    AndroidSecureTokenStore target = method.startsWith("credentials") ? credentials : store;
+                                    if (method.endsWith("Get")) result = target.get();
+                                    else if (method.endsWith("Set")) target.set(args); else target.clear();
                                     resolved(requestId, result, null);
-                                } catch (Exception ignored) { resolved(requestId, null, method.equals("storeGet") ? "TOKEN_STORE_READ_FAILED" : method.equals("storeSet") ? "TOKEN_STORE_WRITE_FAILED" : "TOKEN_STORE_CLEAR_FAILED"); }
+                                } catch (Exception ignored) { resolved(requestId, null, method.endsWith("Get") ? "TOKEN_STORE_READ_FAILED" : method.endsWith("Set") ? "TOKEN_STORE_WRITE_FAILED" : "TOKEN_STORE_CLEAR_FAILED"); }
                             }); return;
                         case "casCreate":
                             if (cas != null) cas.close();

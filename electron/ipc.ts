@@ -9,7 +9,8 @@ export function trustedSender(event: IpcMainInvokeEvent, window: BrowserWindow, 
 }
 export function registerIpc(ipc: Pick<IpcMain, 'handle'>, window: BrowserWindow, url: string, controller: LibraryController): void {
   const handlers: Record<string, (input?: unknown) => unknown> = {
-    [channels.status]: () => controller.status(), [channels.login]: () => controller.login(),
+    [channels.status]: () => controller.status(), [channels.login]: input => controller.login(input),
+    [channels.verify]: () => controller.verifyOfficial(),
     [channels.logout]: () => controller.logout(), [channels.website]: () => controller.openWebsite(),
     [channels.availability]: input => controller.listAvailability(input),
     [channels.seats]: input => controller.listSeats(input),

@@ -5,7 +5,8 @@ const plugin = registerPlugin<{ invoke(input: { command: string; input?: unknown
 const invoke = async <T>(command: string, input?: unknown): Promise<Reply<T>> =>
   (await plugin.invoke({ command, ...(input === undefined ? {} : { input }) })).reply as Reply<T>;
 const api: LibraryApp = {
-  getAuthStatus: () => invoke(channels.status), login: () => invoke(channels.login), logout: () => invoke(channels.logout),
+  getAuthStatus: () => invoke(channels.status), login: input => invoke(channels.login, input), logout: () => invoke(channels.logout),
+  verifyOfficial: () => invoke(channels.verify),
   openBookingWebsite: () => invoke(channels.website), listAvailability: input => invoke(channels.availability, input),
   listSeats: input => invoke(channels.seats, input), reserveManual: input => invoke(channels.manual, input),
   startAutoSelect: input => invoke(channels.autoStart, input), stopAutoSelect: () => invoke(channels.autoStop),

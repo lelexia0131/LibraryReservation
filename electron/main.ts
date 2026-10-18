@@ -1,9 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, safeStorage } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { AuthManager } from '../src/auth/AuthManager.js';
 import { CasTokenProvider } from '../src/auth/CasTokenProvider.js';
 import { PersistentCasSession } from '../src/auth/PersistentCasSession.js';
+import { HttpCasSession, casExchangeTransport } from '../src/auth/HttpCasSession.js';
+import { EncryptedFileCredentialStore } from '../src/auth/stores/EncryptedFileCredentialStore.js';
+import { ElectronCasHttpAdapter } from './adapters/ElectronCasHttpAdapter.js';
 import { EncryptedFileTokenStore } from '../src/auth/stores/EncryptedFileTokenStore.js';
 import { BookingWebSessionBootstrap } from '../src/auth/BookingWebSessionBootstrap.js';
 import { ElectronCredentialCipher } from './adapters/ElectronCredentialCipher.js';
@@ -29,10 +32,13 @@ else {
     const host = new RemoteWindowHost();
     const store = new EncryptedFileTokenStore(app.getPath('userData'), new ElectronCredentialCipher(safeStorage));
     const transport = createAxiosTransport();
-    const auth = new AuthManager(store, new CasTokenProvider(new PersistentCasSession(new ElectronCasBrowserAdapter(host)), new HttpClient(null, transport)));
+    const casHttp = new ElectronCasHttpAdapter(host.session, options => net.request(options));
+    const auth = new AuthManager(store, new CasTokenProvider(new PersistentCasSession(new ElectronCasBrowserAdapter(host), undefined, undefined,
+      new HttpCasSession(casHttp)), new HttpClient(null, casExchangeTransport(casHttp))), undefined, undefined, undefined,
+      new EncryptedFileCredentialStore(app.getPath('userData'), new ElectronCredentialCipher(safeStorage)));
     const website = new BookingWebSessionBootstrap(auth, new ElectronBookingWebBrowserAdapter(host));
     const controller = new LibraryController(auth, website, (token, signal, authority) =>
-      new BookingApi(new HttpClient(token, transport, undefined, () => auth.invalidateToken(token), 0), undefined, authority?.consume, signal));
+      new BookingApi(new HttpClient(token, transport, undefined, rejected => auth.invalidateToken(rejected), 0, auth), undefined, authority?.consume, signal));
     let shuttingDown = false;
     app.on('before-quit', event => {
       if (shuttingDown) return;

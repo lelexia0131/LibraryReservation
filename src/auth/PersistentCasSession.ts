@@ -1,6 +1,8 @@
 import type { CasBrowserAdapter } from './CasBrowserAdapter.js';
 import { AuthCancelledError, AuthError, LoginRequiredError } from './authErrors.js';
 import { CAS_LOGIN_URL, CAS_PARTITION, extractCasFromUrl, isCasLoginUrl } from './casUrlParser.js';
+import type { Credentials } from './Credentials.js';
+import type { HttpCasSession } from './HttpCasSession.js';
 
 export interface CasLoginOptions {
   signal: AbortSignal;
@@ -8,15 +10,18 @@ export interface CasLoginOptions {
   onLoginRequired(): void;
   onAuthenticating(): void;
   onCallback(silent: boolean): void;
+  credentials?(): Promise<Credentials | null>;
+  official?: boolean;
 }
 
 export class PersistentCasSession {
   private active = false;
   constructor(private readonly browser: CasBrowserAdapter, private readonly silentTimeoutMs = 8000,
-    private readonly interactiveTimeoutMs = 300000) {}
+    private readonly interactiveTimeoutMs = 300000, private readonly http?: HttpCasSession) {}
 
   async authenticate<T>(options: CasLoginOptions, consume: (cas: string) => Promise<T>): Promise<T> {
     if (options.signal.aborted) throw new AuthCancelledError();
+    if (this.http && !options.official) return this.http.authenticate(options, consume);
     if (this.active) throw new AuthError('AUTH_IN_PROGRESS', 'Authentication already in progress.');
     this.active = true;
     let window: ReturnType<CasBrowserAdapter['createWindow']> | undefined;
@@ -30,7 +35,7 @@ export class PersistentCasSession {
       const result = await new Promise<T>((resolve, reject) => {
         let captured = false;
         let finished = false;
-        let shown = false;
+        let shown = Boolean(options.official);
         const fail = (error: AuthError) => { finished = true; reject(error); };
         const cancel = () => fail(new AuthCancelledError());
         unsubscribe.push(current.onClosed(cancel), current.onLoadFailed(() => {
@@ -53,8 +58,10 @@ export class PersistentCasSession {
             resolve(value);
           }).catch(error => fail(error instanceof AuthError ? error : new AuthError('AUTH_COMPLETION_FAILED', 'Authentication could not be completed.')));
         }));
+        if (shown) { options.onAuthenticating(); current.show(); }
         timer = setTimeout(() => {
           if (finished || captured) return;
+          if (shown) { fail(new AuthError('CAS_LOGIN_TIMEOUT', 'Interactive CAS login timed out.')); return; }
           if (!isCasLoginUrl(current.getURL())) {
             fail(new AuthError('CAS_SILENT_TIMEOUT', 'Silent CAS navigation timed out.'));
             return;
@@ -65,7 +72,7 @@ export class PersistentCasSession {
           options.onAuthenticating();
           current.show();
           timer = setTimeout(() => fail(new AuthError('CAS_LOGIN_TIMEOUT', 'Interactive CAS login timed out.')), this.interactiveTimeoutMs);
-        }, this.silentTimeoutMs);
+        }, shown ? this.interactiveTimeoutMs : this.silentTimeoutMs);
         void current.loadURL(CAS_LOGIN_URL).catch(() => {
           if (!captured) fail(new AuthError('CAS_NAVIGATION_FAILED', 'CAS page could not be loaded.'));
         });

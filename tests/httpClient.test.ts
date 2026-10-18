@@ -15,7 +15,7 @@ for (const status of [undefined, 502, 503, 504]) test(`temporary query error ${s
 });
 for (const status of [400, 401, 403, 429, 500]) test(`query HTTP ${status} is not retried`, async () => {
   const h = harness(request => httpFailure(request, status));
-  await assert.rejects(h.http.post('/api/Seat/date', {}), { code: 'HTTP_ERROR' });
+  await assert.rejects(h.http.post('/api/Seat/date', {}), { code: status === 401 ? 'INVALID_TOKEN' : 'HTTP_ERROR' });
   assert.equal(h.requests.length, 1);
 });
 for (const status of [undefined, 502, 503, 504, 401]) test(`confirm error ${status} is never retried or leaked`, async () => {
@@ -57,7 +57,7 @@ for (const path of ['/api/Seat/date', '/api/Seat/confirm']) test(`401 invalidate
     throw new AxiosError('private transport data', 'ERR_BAD_REQUEST', config, undefined,
       { status: 401, statusText: 'Unauthorized', headers: new AxiosHeaders(), data: { token }, config });
   } }), undefined, () => h.auth.invalidateToken(token));
-  await assert.rejects(http.post(path, {}), { code: 'HTTP_ERROR' });
+  await assert.rejects(http.post(path, {}), { code: path.endsWith('/confirm') ? 'CONFIRM_OUTCOME_UNKNOWN' : 'INVALID_TOKEN' });
   assert.equal(requests, 1);
   assert.equal(h.store.value, null);
   assert.equal(h.browser.windows.length, 0);

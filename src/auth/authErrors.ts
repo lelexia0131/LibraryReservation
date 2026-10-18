@@ -1,7 +1,7 @@
 import { BookingError } from '../errors.js';
 
 export class AuthError extends BookingError {
-  constructor(code: string, message: string) { super(code, message); this.name = 'AuthError'; }
+  constructor(code: string, message: string, transient = false) { super(code, message, undefined, undefined, undefined, transient); this.name = 'AuthError'; }
 }
 export class AuthCancelledError extends AuthError {
   constructor() { super('AUTH_CANCELLED', 'Authentication cancelled.'); }

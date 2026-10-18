@@ -17,13 +17,14 @@ async function until(check: () => boolean) {
   for (let i = 0; i < 300; i++) { if (check()) return; await tick(); }
   assert.fail('Core did not settle');
 }
-function android(outcome: 'success' | 'timeout' | '5xx' | 'malformed' | 'trailingJson' | 'business' | 'empty' | 'bridgeLost' = 'success') {
+function android(outcome: 'success' | 'timeout' | '5xx' | 'malformed' | 'trailingJson' | 'business' | 'empty' | 'bridgeLost' | 'authExpired' = 'success') {
   const token = jwt(Math.floor(Date.now() / 1000) + 3600);
   let saved: unknown = null;
   const requests: Array<{ path: string; payload: Record<string, unknown>; authorization: unknown }> = [];
   const publicReplies: unknown[] = [];
   const pending = new Map<string, (value: any) => void>();
   let sequence = 0;
+  let rejected = false;
   const context: any = { URL, URLSearchParams, AbortController, TextDecoder, atob, setTimeout, clearTimeout, console,
     NativeCore: {
       postMessage(text: string) {
@@ -38,10 +39,14 @@ function android(outcome: 'success' | 'timeout' | '5xx' | 'malformed' | 'trailin
         queueMicrotask(() => {
           let value: unknown;
           if (method === 'storeGet') value = saved;
+          else if (method === 'credentialsGet') value = null;
+          else if (method === 'credentialsClear') value = null;
+          else if (method === 'casHttp' && !args.url.endsWith('/api/cas/user')) value = { status: 302, body: '', location: 'https://booking.lib.zju.edu.cn/h5/index.html#/cas?cas=synthetic-credential' };
           else if (method === 'storeSet') saved = args;
           else if (method === 'storeClear') saved = null;
           else if (method === 'casLoad') context.TrustedCore.event({ id: args.id, kind: 'navigation', url: 'https://booking.lib.zju.edu.cn/h5/#/cas?cas=synthetic-credential' });
-          else if (method === 'http') {
+          else if (method === 'http' || method === 'casHttp') {
+            if (method === 'casHttp') Object.assign(args, { path: '/api/cas/user', payload: JSON.parse(args.body), authorization: null });
             requests.push(args);
             if (args.path === '/api/cas/user') {
               assert.equal(args.authorization, null); assert.deepEqual(args.payload, { cas: 'synthetic-credential' });
@@ -51,6 +56,7 @@ function android(outcome: 'success' | 'timeout' | '5xx' | 'malformed' | 'trailin
               assert.equal(args.payload.authorization, `bearer${token}`);
               const response = normalResponse({ path: args.path, body: args.payload } as Request);
               value = { status: 200, data: response };
+              if (outcome === 'authExpired' && !rejected) { rejected = true; value = { status: 200, data: { code: 10001 } }; }
               if (outcome === 'empty' && args.path === '/api/Seat/seat') value = { status: 200, data: { code: 1, data: [] } };
               if (args.path === '/api/Seat/confirm') {
                 if (outcome === 'bridgeLost') { context.TrustedCore.resolve(id, { ok: false, code: 'NATIVE_UNAVAILABLE' }); return; }
@@ -62,7 +68,7 @@ function android(outcome: 'success' | 'timeout' | '5xx' | 'malformed' | 'trailin
               }
             }
           } else assert.ok(['casCreate', 'casClose', 'casClear', 'httpCancel', 'openWebsite'].includes(method));
-          if (method === 'http' && value && typeof value === 'object' && 'data' in value) {
+          if ((method === 'http' || method === 'casHttp') && value && typeof value === 'object' && 'data' in value) {
             const { data, ...metadata } = value;
             value = { ...metadata, body: JSON.stringify(data) };
           }
@@ -147,7 +153,7 @@ for (const outcome of ['timeout', '5xx', 'malformed', 'trailingJson', 'business'
     } finally { await h.shutdown(); }
   });
 }
-for (const outcome of ['success', 'timeout', '5xx', 'malformed', 'bridgeLost'] as const) {
+for (const outcome of ['success', 'timeout', '5xx', 'malformed', 'bridgeLost', 'authExpired'] as const) {
   test(`Android automatic ${outcome} stops after one confirm through the native transport adapter`, async () => {
     const h = android(outcome);
     try {
@@ -155,8 +161,9 @@ for (const outcome of ['success', 'timeout', '5xx', 'malformed', 'bridgeLost'] a
       await h.invoke(channels.autoStart, { ...period, mode: 'all', scopes: [] });
       let status: any;
       for (let i = 0; i < 100; i++) { status = await h.invoke(channels.autoStatus); if (['SUCCESS', 'FAILED'].includes(status.value.state)) break; await tick(); }
-      assert.equal(status.value.state, outcome === 'success' ? 'SUCCESS' : 'FAILED');
-      if (outcome !== 'success') assert.match(status.value.message, /结果未知/);
+      assert.equal(status.value.state, outcome === 'success' || outcome === 'authExpired' ? 'SUCCESS' : 'FAILED');
+      if (outcome !== 'success' && outcome !== 'authExpired') assert.match(status.value.message, /结果未知/);
+      if (outcome === 'authExpired') assert.equal(h.requests.filter(r => r.path === '/api/cas/user').length, 2);
       assert.equal(h.requests.filter(r => r.path.endsWith('/confirm')).length, 1);
       await tick(); assert.equal(h.requests.filter(r => r.path.endsWith('/confirm')).length, 1);
     } finally { await h.shutdown(); }

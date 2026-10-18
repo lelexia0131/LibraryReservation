@@ -8,7 +8,8 @@ export async function dispatch(controller: LibraryController, command: string, i
     let value: unknown;
     switch (command) {
       case channels.status: value = controller.status(); break;
-      case channels.login: value = await controller.login(); break;
+      case channels.login: value = await controller.login(input); break;
+      case channels.verify: value = await controller.verifyOfficial(); break;
       case channels.logout: value = await controller.logout(); break;
       case channels.website: value = await controller.openWebsite(); break;
       case channels.availability: value = await controller.listAvailability(input); break;

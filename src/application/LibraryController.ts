@@ -1,4 +1,5 @@
 import type { AuthManager } from '../auth/AuthManager.js';
+import { validCredentials } from '../auth/Credentials.js';
 import type { BookingWebSessionBootstrap } from '../auth/BookingWebSessionBootstrap.js';
 import { BookingService } from '../domain/BookingService.js';
 import { isDay, isTime, type BookingConfig } from '../config/config.js';
@@ -19,6 +20,14 @@ const messages: Record<string, string> = {
   CAS_NAVIGATION_FAILED: '登录页面无法打开，请检查网络连接。', CAS_SILENT_TIMEOUT: '登录检查超时，请检查网络后重试。',
   CAS_LOGIN_TIMEOUT: '登录已超时，请重新登录。', CAS_TOKEN_EXCHANGE_FAILED: '登录未完成，请重新登录。',
   TOKEN_EXPIRY_INVALID: '登录已失效，请重新登录。',
+  AUTH_NETWORK_FAILED: '认证服务暂时无法连接，请检查网络后重试。',
+  AUTH_TIMEOUT: '学校认证连接超时，请稍后重试。',
+  AUTH_DNS_FAILED: '无法解析学校认证地址，请检查手机网络或 DNS 设置。',
+  AUTH_TLS_FAILED: '学校认证证书校验失败，请检查手机日期和网络环境。',
+  AUTH_BRIDGE_FAILED: '安卓认证组件未能完成请求，请重新打开应用。',
+  CREDENTIALS_INVALID: '账号或密码无效，请重新输入。',
+  MANUAL_VERIFICATION_REQUIRED: '学校要求验证码或额外验证，请点击“官方验证”完成认证。',
+  CAS_PROTOCOL_CHANGED: '学校认证协议已变化，请使用官方验证入口。',
   SECURE_STORAGE_UNAVAILABLE: '系统无法安全保存登录状态，请重新启动应用。',
   TOKEN_STORE_WRITE_FAILED: '登录状态保存失败，请检查磁盘空间后重试。',
   TOKEN_STORE_READ_FAILED: '登录状态读取失败，请重新登录。', AUTH_CLEAR_FAILED: '退出未完成，请再次退出登录。',
@@ -116,15 +125,35 @@ export class LibraryController {
   private closed = false;
   private suspended = false;
   private operation?: Promise<unknown>;
-  constructor(private readonly auth: Pick<AuthManager, 'getStatus' | 'getToken' | 'logout'> & Partial<Pick<AuthManager, 'invalidateToken' | 'cancelAuthentication'>>,
+  constructor(private readonly auth: Pick<AuthManager, 'getStatus' | 'getToken' | 'logout'> & Partial<Pick<AuthManager, 'invalidateToken' | 'cancelAuthentication' | 'login' | 'verifyOfficial'>>,
     private readonly website: Pick<BookingWebSessionBootstrap, 'openBookingWebsite'>,
     private readonly apiFactory: (token: string, signal: AbortSignal, authority?: ConfirmationAuthority) => BookingApi,
     private readonly createService = () => new BookingService(auth, token => apiFactory(token, new AbortController().signal), () => {})) {
     this.monitor = new AutoSelectMonitor(signal => this.services(signal, true), error => { safeError(error, console.warn); });
   }
 
-  status(): PublicAuthStatus { return { state: this.auth.getStatus().state }; }
-  async login(): Promise<PublicAuthStatus> { return this.exclusive(async () => { await atStage('auth', () => this.auth.getToken()); return this.status(); }); }
+  status(): PublicAuthStatus {
+    const { state, errorCode } = this.auth.getStatus();
+    return { state, ...(errorCode ? { errorCode } : {}) };
+  }
+  async login(value?: unknown): Promise<PublicAuthStatus> {
+    return this.exclusive(async () => {
+      if (value === undefined) await atStage('auth', () => this.auth.getToken());
+      else {
+        const input = objectInput(value, ['username', 'password', 'remember']);
+        if (!validCredentials(input) || typeof input.remember !== 'boolean' || !this.auth.login) throw new BookingError('INVALID_INPUT', '');
+        await atStage('auth', () => this.auth.login!({ username: input.username.trim(), password: input.password, remember: input.remember as boolean }));
+      }
+      return this.status();
+    });
+  }
+  async verifyOfficial(): Promise<PublicAuthStatus> {
+    return this.exclusive(async () => {
+      if (!this.auth.verifyOfficial) throw new BookingError('LOGIN_REQUIRED', '');
+      await atStage('auth', () => this.auth.verifyOfficial!());
+      return this.status();
+    });
+  }
   async logout(): Promise<PublicAuthStatus> {
     this.taskVersion++;
     await this.monitor.stop();
@@ -133,7 +162,6 @@ export class LibraryController {
   async openWebsite(): Promise<void> { return this.exclusive(() => this.website.openBookingWebsite()); }
   private async services(signal: AbortSignal, confirm = false) {
     if (this.closed || this.suspended || signal.aborted) throw new BookingError('STOPPED', '');
-    if (this.status().state !== 'AUTHENTICATED') throw new BookingError('LOGIN_REQUIRED', '', 'auth');
     const token = await atStage('auth', () => this.auth.getToken());
     const api = this.apiFactory(token, signal, confirm ? new ConfirmationAuthority(signal) : undefined);
     const discovery = new AvailabilityService(api, signal);

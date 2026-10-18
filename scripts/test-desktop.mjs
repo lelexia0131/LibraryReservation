@@ -15,11 +15,17 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.waitForFunction(() => Boolean(window.libraryApp));
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.libraryApp)), ['getAuthStatus', 'login', 'logout', 'openBookingWebsite',
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.libraryApp)), ['getAuthStatus', 'login', 'verifyOfficial', 'logout', 'openBookingWebsite',
     'listAvailability', 'listSeats', 'reserveManual', 'startAutoSelect', 'stopAutoSelect', 'getAutoSelectStatus']);
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   await page.locator('#day').fill('2026-09-19');
-  assert.equal((await page.evaluate(() => window.libraryApp.login())).ok, true);
+  await page.locator('#auth-button').click();
+  await page.locator('#login-username').fill('synthetic-user');
+  await page.locator('#login-password').fill('synthetic-password');
+  assert.equal(await page.locator('#login-remember').isChecked(), false);
+  await page.locator('#login-remember').check();
+  await page.locator('#login-form button[type=submit]').click();
+  assert.equal(await page.locator('#login-password').inputValue(), '');
   await page.waitForFunction(() => document.querySelector('#auth-status').textContent === '已登录');
   assert.equal(await app.evaluate(() => globalThis.desktopTest.encrypted()), true);
   assert.equal(await app.evaluate(() => globalThis.desktopTest.restored()), true);

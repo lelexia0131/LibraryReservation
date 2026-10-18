@@ -10,7 +10,7 @@ import org.json.JSONObject;
 
 @CapacitorPlugin(name = "LibraryApplication")
 public final class LibraryApplicationPlugin extends Plugin {
-    static final Set<String> COMMANDS = Set.of("auth:get-status", "auth:login", "auth:logout", "booking:open-web",
+    static final Set<String> COMMANDS = Set.of("auth:get-status", "auth:login", "auth:verify-official", "auth:logout", "booking:open-web",
         "availability:list", "availability:seats", "reservation:manual", "autoselect:start", "autoselect:stop", "autoselect:status");
     @PluginMethod public void invoke(PluginCall call) {
         String command = call.getString("command");

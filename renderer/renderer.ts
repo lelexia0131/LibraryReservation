@@ -3,6 +3,8 @@ import type { LibraryApp, PublicAuthStatus, Reply, Period, Location, LocationVie
 declare global { interface Window { libraryApp: LibraryApp } }
 const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const authButton = byId<HTMLButtonElement>('auth-button');
+const loginDialog = byId<HTMLDialogElement>('login-dialog');
+const loginForm = byId<HTMLFormElement>('login-form');
 const scopeChoices = new Map<string, Scope>();
 let authState: PublicAuthStatus['state'] = 'UNKNOWN';
 let loadedForSession = false;
@@ -33,11 +35,16 @@ function controls(): void {
   document.querySelectorAll<HTMLButtonElement>('.region,.seat').forEach(button => { button.disabled = busy || active() || !loggedIn; });
 }
 function showAuth(status: PublicAuthStatus): void {
+  const previous = authState;
   authState = status.state;
-  const labels: Record<typeof authState, string> = { UNKNOWN: '正在检查', CHECKING: '正在检查', SILENT_REFRESH: '正在检查', AUTHENTICATING: '正在登录', AUTHENTICATED: '已登录', LOGIN_REQUIRED: '未登录', FAILED: '登录失败' };
+  const labels: Record<typeof authState, string> = { UNKNOWN: '正在检查', CHECKING: '正在检查', SILENT_REFRESH: '正在检查', AUTHENTICATING: '正在登录', AUTHENTICATED: '已登录', LOGIN_REQUIRED: '未登录', VERIFICATION_REQUIRED: '需要官方验证', FAILED: '登录失败' };
   byId('auth-status').textContent = labels[authState];
   byId('auth-status').className = `badge ${authState === 'AUTHENTICATED' ? 'success' : 'pending'}`;
-  if (['LOGIN_REQUIRED', 'FAILED'].includes(authState)) loadedForSession = false;
+  byId<HTMLButtonElement>('verify-button').hidden = authState !== 'VERIFICATION_REQUIRED' && status.errorCode !== 'CAS_PROTOCOL_CHANGED';
+  byId<HTMLButtonElement>('verify-button').disabled = busy;
+  if (previous !== authState && authState === 'VERIFICATION_REQUIRED') notice('学校要求验证码或额外验证，请点击“官方验证”完成认证。');
+  if (previous !== authState && status.errorCode === 'CREDENTIALS_INVALID') notice('保存的账号或密码已失效，请重新登录。');
+  if (['LOGIN_REQUIRED', 'VERIFICATION_REQUIRED', 'FAILED'].includes(authState)) loadedForSession = false;
   if (authState === 'AUTHENTICATED' && !loadedForSession) { loadedForSession = true; needsLoad = true; }
   controls();
 }
@@ -157,11 +164,28 @@ async function poll(): Promise<void> {
 }
 authButton.addEventListener('click', () => {
   const logout = authState === 'AUTHENTICATED';
-  void run(() => logout ? window.libraryApp.logout() : window.libraryApp.login(), status => {
+  if (!logout) { loginForm.reset(); loginDialog.showModal(); byId('login-username').focus(); return; }
+  void run(() => window.libraryApp.logout(), status => {
     showAuth(status);
     if (logout) { clearSelection(); scopeChoices.clear(); needsLoad = false; renderTree(byId('locations'), [], false); renderTree(byId('scopes'), [], true); updateScopeCount(); }
     else needsLoad = true;
   });
+});
+loginForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (busy) return;
+  void run(() => window.libraryApp.login({ username: byId<HTMLInputElement>('login-username').value,
+    password: byId<HTMLInputElement>('login-password').value, remember: byId<HTMLInputElement>('login-remember').checked }), status => {
+    showAuth(status); needsLoad = true;
+  });
+  // Dispatch immediately, then drop form values; public UI never receives saved credentials.
+  loginForm.reset(); loginDialog.close();
+});
+loginDialog.addEventListener('close', () => loginForm.reset());
+byId('login-cancel').addEventListener('click', () => loginDialog.close());
+for (const id of ['verify-button', 'login-official']) byId(id).addEventListener('click', () => {
+  loginForm.reset(); loginDialog.close();
+  void run(() => window.libraryApp.verifyOfficial(), status => { showAuth(status); needsLoad = true; });
 });
 for (const id of ['website-button', 'result-website']) byId(id).addEventListener('click', () => { void run(() => window.libraryApp.openBookingWebsite(), () => {}); });
 byId('refresh-button').addEventListener('click', () => { void loadLocations(true); });

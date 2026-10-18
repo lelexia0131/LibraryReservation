@@ -111,7 +111,7 @@ test('IPC accepts only exact local main window and exposes the fixed desktop all
   const event = { sender: contents, senderFrame: mainFrame } as unknown as IpcMainInvokeEvent;
   const handlers = new Map<string, (event: IpcMainInvokeEvent, input?: unknown) => unknown>();
   registerIpc({ handle: (channel, handler) => { handlers.set(channel, handler); } }, window, mainFrame.url, desktop().controller);
-  assert.deepEqual([...handlers.keys()], ['auth:get-status', 'auth:login', 'auth:logout', 'booking:open-web',
+  assert.deepEqual([...handlers.keys()], ['auth:get-status', 'auth:login', 'auth:verify-official', 'auth:logout', 'booking:open-web',
     'availability:list', 'availability:seats', 'reservation:manual', 'autoselect:start', 'autoselect:stop', 'autoselect:status']);
   assert.equal(trustedSender(event, window, mainFrame.url), true);
   for (const other of [

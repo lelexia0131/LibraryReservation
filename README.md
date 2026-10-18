@@ -108,7 +108,7 @@ Axios
 当前安装包：
 
 ```text
-dist/LibraryReservation-Setup-0.2.0-x64.exe
+dist/LibraryReservation-Setup-0.3.0-x64.exe
 ```
 
 Electron 端主要负责：

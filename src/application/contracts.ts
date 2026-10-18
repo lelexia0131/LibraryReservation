@@ -2,6 +2,8 @@ import type { AuthState } from '../auth/AuthManager.js';
 import type { Location, LocationView, Period, Scope } from '../domain/AvailabilityService.js';
 import type { AutoMode, AutoState } from '../domain/AutoSelectMonitor.js';
 import type { OperationStage } from '../errors.js';
+import type { LoginInput } from '../auth/Credentials.js';
+export type { LoginInput };
 export type { Location, LocationView, Period, Scope, AutoMode };
 export interface AvailabilityView { locations: LocationView[]; scopes: Location[] }
 export interface SeatsView { location: Location; seats: string[]; day: string; startTime: string; endTime: string }
@@ -12,14 +14,15 @@ export interface BookingFormInput {
   targetDate: string; targetSeat: string; targetBuilding?: string; targetFloor?: string;
   targetArea?: string; startTime: string; endTime: string;
 }
-export interface PublicAuthStatus { state: AuthState }
+export interface PublicAuthStatus { state: AuthState; errorCode?: string }
 export interface QueryResult {
   available: boolean; seat: string; area: string; day: string; startTime: string; endTime: string;
 }
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string; stage?: OperationStage } };
 export interface LibraryApp {
   getAuthStatus(): Promise<Reply<PublicAuthStatus>>;
-  login(): Promise<Reply<PublicAuthStatus>>;
+  login(input?: LoginInput): Promise<Reply<PublicAuthStatus>>;
+  verifyOfficial(): Promise<Reply<PublicAuthStatus>>;
   logout(): Promise<Reply<PublicAuthStatus>>;
   openBookingWebsite(): Promise<Reply<void>>;
   listAvailability(input: Period & { refresh?: boolean }): Promise<Reply<AvailabilityView>>;
@@ -30,7 +33,7 @@ export interface LibraryApp {
   getAutoSelectStatus(): Promise<Reply<AutoView>>;
 }
 export const channels = {
-  status: 'auth:get-status', login: 'auth:login', logout: 'auth:logout',
+  status: 'auth:get-status', login: 'auth:login', verify: 'auth:verify-official', logout: 'auth:logout',
   website: 'booking:open-web', availability: 'availability:list', seats: 'availability:seats', manual: 'reservation:manual',
   autoStart: 'autoselect:start', autoStop: 'autoselect:stop', autoStatus: 'autoselect:status',
 } as const;

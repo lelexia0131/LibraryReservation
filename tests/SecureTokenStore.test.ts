@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EncryptedFileTokenStore, type CredentialCipher } from '../src/auth/stores/EncryptedFileTokenStore.js';
 import { jwt, now } from './authFixtures.js';
+import { EncryptedFileCredentialStore } from '../src/auth/stores/EncryptedFileCredentialStore.js';
 
 // Test-only cipher. Production must supply OS-backed encryption; no key is persisted here.
 function testCipher(): CredentialCipher {
@@ -25,6 +26,21 @@ function testCipher(): CredentialCipher {
     },
   };
 }
+
+test('credentials use separate ciphertext, survive restart, omit extra fields and clear on logout', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'booking-credentials-test-'));
+  try {
+    const cipher = testCipher(), store = new EncryptedFileCredentialStore(directory, cipher);
+    const credentials = { username: 'synthetic-user', password: 'synthetic-password', extra: 'private-profile' };
+    await store.set(credentials);
+    const bytes = await readFile(join(directory, 'auth', 'credentials.bin'));
+    for (const secret of Object.values(credentials)) assert.ok(!bytes.includes(Buffer.from(secret)));
+    assert.deepEqual(await new EncryptedFileCredentialStore(directory, cipher).get(), { username: credentials.username, password: credentials.password });
+    await store.clear(); assert.equal(await store.get(), null);
+    cipher.isEncryptionAvailable = () => false;
+    await assert.rejects(store.set(credentials), { code: 'SECURE_STORAGE_UNAVAILABLE' });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 test('encrypted file persists only minimal fields, replaces atomically and recovers corruption', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'booking-auth-test-'));
   try {

@@ -3,7 +3,8 @@ import { channels, type LibraryApp } from '../src/application/contracts.js';
 
 const api: LibraryApp = {
   getAuthStatus: () => ipcRenderer.invoke(channels.status),
-  login: () => ipcRenderer.invoke(channels.login),
+  login: input => ipcRenderer.invoke(channels.login, input),
+  verifyOfficial: () => ipcRenderer.invoke(channels.verify),
   logout: () => ipcRenderer.invoke(channels.logout),
   openBookingWebsite: () => ipcRenderer.invoke(channels.website),
   listAvailability: input => ipcRenderer.invoke(channels.availability, input),

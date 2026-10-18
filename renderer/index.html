@@ -2,9 +2,10 @@
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>浙江大学图书馆预约助手</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">阅</span><h1>浙江大学图书馆预约助手</h1></div><div class="account"><span id="auth-status" class="badge pending" role="status">正在检查</span><button id="auth-button" class="button secondary" disabled>登录</button><button id="website-button" class="button text-button">打开图书馆 ↗</button></div></header>
+<header class="app-header"><div class="brand"><h1>浙江大学图书馆预约助手</h1></div><div class="account"><span id="auth-status" class="badge pending" role="status">正在检查</span><button id="auth-button" class="button secondary" disabled>登录</button><button id="verify-button" class="button secondary" hidden>官方验证</button><button id="website-button" class="button text-button">打开图书馆 ↗</button></div></header>
+<dialog id="login-dialog" aria-labelledby="login-title"><form id="login-form" autocomplete="off"><h2 id="login-title">浙江大学账号登录</h2><label>统一身份认证账号<input id="login-username" name="username" autocomplete="off" maxlength="100" required></label><label>密码<input id="login-password" name="password" type="password" autocomplete="off" maxlength="256" required></label><label class="remember"><input id="login-remember" type="checkbox">同意在本机加密保存账号密码，用于自动登录</label><div class="login-actions"><button type="button" id="login-cancel" class="button secondary">取消</button><button type="submit" class="button primary">登录</button></div><button type="button" id="login-official" class="button text-button">需要验证码或其他认证？打开官方验证</button></form></dialog>
 <main>
-<div class="intro"><p class="eyebrow">YOUR STUDY SPACE</p><h2>给专注，留一个位置。</h2></div><div id="notice" class="notice" role="alert" hidden></div>
+<div id="notice" class="notice" role="alert" hidden></div>
 <div class="workspace">
 <section class="card manual" aria-labelledby="manual-title"><div class="section-heading"><h2 id="manual-title">手动选择</h2><span class="step">01</span></div>
 <fieldset id="period-fields"><div class="form-grid"><label>日期<input id="day" type="date" required></label><label>开始时间<input id="startTime" type="time" value="09:00" required></label><label>结束时间<input id="endTime" type="time" value="22:00" required></label></div></fieldset>

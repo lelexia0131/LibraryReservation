@@ -1,6 +1,7 @@
 import { HttpClient } from '../api/httpClient.js';
 import { ensureToken } from '../config/config.js';
-import { CasTokenExchangeError } from './authErrors.js';
+import { AuthCancelledError, AuthError, CasTokenExchangeError } from './authErrors.js';
+import { BookingError } from '../errors.js';
 import type { CasLoginOptions, PersistentCasSession } from './PersistentCasSession.js';
 
 export async function exchangeCasForBookingToken(cas: string, http: HttpClient, signal?: AbortSignal): Promise<string> {
@@ -11,7 +12,14 @@ export async function exchangeCasForBookingToken(cas: string, http: HttpClient, 
       || !('member' in response) || !response.member || typeof response.member !== 'object'
       || !('token' in response.member) || typeof response.member.token !== 'string') throw new CasTokenExchangeError();
     return ensureToken(response.member.token);
-  } catch { throw new CasTokenExchangeError(); }
+  } catch (error) {
+    if (signal?.aborted) throw new AuthCancelledError();
+    if (error instanceof AuthError && ['AUTH_TIMEOUT', 'AUTH_DNS_FAILED', 'AUTH_TLS_FAILED', 'AUTH_BRIDGE_FAILED'].includes(error.code)) throw error;
+    if (error instanceof BookingError && (error.transient || error.httpStatus === 429 || (error.httpStatus !== undefined && error.httpStatus >= 500))) {
+      throw new AuthError('AUTH_NETWORK_FAILED', '', true);
+    }
+    throw new CasTokenExchangeError();
+  }
 }
 
 export class CasTokenProvider {

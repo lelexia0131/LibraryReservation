@@ -18,7 +18,12 @@ import org.json.JSONObject;
 final class AndroidSecureTokenStore {
     private static final String ALIAS = "library-booking-token-v1";
     private final AtomicFile file;
-    AndroidSecureTokenStore(Context context) { file = new AtomicFile(new File(context.getNoBackupFilesDir(), "booking-token.bin")); }
+    private final boolean credentials;
+    AndroidSecureTokenStore(Context context) { this(context, false); }
+    AndroidSecureTokenStore(Context context, boolean credentials) {
+        this.credentials = credentials;
+        file = new AtomicFile(new File(context.getNoBackupFilesDir(), credentials ? "booking-credentials.bin" : "booking-token.bin"));
+    }
     private SecretKey key() throws Exception {
         KeyStore store = KeyStore.getInstance("AndroidKeyStore");
         store.load(null);
@@ -32,6 +37,12 @@ final class AndroidSecureTokenStore {
         return (SecretKey) store.getKey(ALIAS, null);
     }
     private JSONObject minimal(JSONObject input) throws Exception {
+        if (credentials) {
+            String username = input.getString("username"), password = input.getString("password");
+            if (username.trim().isEmpty() || username.length() > 100 || password.isEmpty() || password.length() > 256
+                || (username + password).matches("(?s).*[\\x00-\\x1f\\x7f].*")) throw new Exception();
+            return new JSONObject().put("username", username).put("password", password);
+        }
         String token = input.getString("token");
         if (token.isEmpty() || !token.equals(token.trim()) || !Double.isFinite(input.getDouble("savedAt"))) throw new Exception();
         JSONObject value = new JSONObject().put("token", token).put("savedAt", input.getLong("savedAt"));
